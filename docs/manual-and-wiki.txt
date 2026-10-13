@@ -1,0 +1,9 @@
+点击 game/start-game.bat 开始游戏
+运气不好的话启动游戏四个字可能会乱码，可能会是口口口口.口口口。
+
+快速上手：wasd选择,z继续,x后退,m菜单,c查看战斗属性
+祝游戏愉快
+适当游戏益脑，沉迷游戏伤身。
+
+游戏教程可参考up主四零：https://space.bilibili.com/1897229?spm_id_from=333.337.search-card.all.click
+中文wiki：https://wiki.pokerogue.net/zh:start
