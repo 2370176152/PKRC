@@ -1,0 +1,1 @@
+{"title":"天赋图鉴","progress":"已发现: {{discovered}}/{{total}}","noTalents":"暂无天赋","noResults":"无匹配结果","scrollHint":"{{start}}-{{end}}/{{total}} (↑↓滚动)","undiscovered":"尚未发现此天赋","conditions":"条件: ","noConditions":"无","conditionType":"需要{{type}}属性宝可梦","conditionGen":"需要第{{gen}}世代宝可梦","conditionTag":"需要{{count}}个标签","conditionWave":"需要达到第{{wave}}层"}
