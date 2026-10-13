@@ -1,0 +1,3440 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pokemon Rouge 存档修改器</title>
+<script src="crypto-js.js"></script>
+<script src="species-names.js"></script>
+<script src="ability-names.js"></script>
+<script src="move-names.js"></script>
+<script src="species-abilities.js"></script>
+<script src="pokemon-form-names.js"></script>
+<script src="modifier-names.js"></script>
+<script src="modifier-classes.js"></script>
+<script src="modifier-descriptions.js"></script>
+<script src="modifier-expanded.js"></script>
+<script src="move-info.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: #e0e0e0;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  .container { max-width: 1400px; margin: 0 auto; }
+  h1 {
+    text-align: center;
+    color: #ffd700;
+    margin-bottom: 20px;
+    font-size: 28px;
+    text-shadow: 0 2px 10px rgba(255, 215, 0, 0.3);
+  }
+  .toolbar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    align-items: center;
+    background: rgba(255,255,255,0.05);
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .toolbar label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+  }
+  .toolbar input[type="file"] { display: none; }
+  .btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-primary { background: #4a9eff; color: white; }
+  .btn-primary:hover { background: #3a8eef; transform: translateY(-1px); }
+  .btn-success { background: #2ecc71; color: white; }
+  .btn-success:hover { background: #27ae60; transform: translateY(-1px); }
+  .btn-warning { background: #f39c12; color: white; }
+  .btn-warning:hover { background: #e67e22; transform: translateY(-1px); }
+  .btn-danger { background: #e74c3c; color: white; }
+  .btn-danger:hover { background: #c0392b; transform: translateY(-1px); }
+  .btn-info { background: #0ea5e9; color: white; }
+  .btn-info:hover { background: #0284c7; transform: translateY(-1px); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .file-tabs {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+  }
+  .file-tab {
+    padding: 10px 18px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px 8px 0 0;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+    position: relative;
+  }
+  .file-tab:hover { background: rgba(255,255,255,0.12); }
+  .file-tab.active {
+    background: #4a9eff;
+    border-color: #4a9eff;
+    color: white;
+  }
+  .file-tab .dirty-dot {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    width: 8px;
+    height: 8px;
+    background: #f39c12;
+    border-radius: 50%;
+    display: none;
+  }
+  .file-tab.dirty .dirty-dot { display: block; }
+  .editor-container {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .mode-tabs {
+    display: flex;
+    background: rgba(0,0,0,0.2);
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  .mode-tab {
+    padding: 12px 24px;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+    font-weight: 500;
+  }
+  .mode-tab:hover { background: rgba(255,255,255,0.05); }
+  .mode-tab.active {
+    border-bottom-color: #ffd700;
+    color: #ffd700;
+  }
+  .panel { display: none; padding: 20px; }
+  .panel.active { display: block; }
+
+  /* Batch Mode */
+  .batch-section {
+    margin-bottom: 25px;
+    padding: 18px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 8px;
+    border-left: 4px solid #4a9eff;
+  }
+  .batch-section h3 {
+    color: #4a9eff;
+    margin-bottom: 15px;
+    font-size: 16px;
+  }
+  .batch-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 15px;
+  }
+  .batch-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .batch-item label {
+    font-size: 13px;
+    color: #aaa;
+    font-weight: 500;
+  }
+  .batch-item input, .batch-item select {
+    padding: 8px 12px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    color: #e0e0e0;
+    font-size: 14px;
+  }
+  .batch-item input:focus, .batch-item select:focus {
+    outline: none;
+    border-color: #4a9eff;
+  }
+  .batch-item .current-value {
+    font-size: 12px;
+    color: #888;
+  }
+  .batch-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+    flex-wrap: wrap;
+  }
+
+  /* Pokemon Party Editor */
+  .party-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .pokemon-card {
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 15px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .pokemon-card:hover {
+    border-color: #4a9eff;
+    background: rgba(74, 158, 255, 0.1);
+  }
+  .pokemon-card.expanded {
+    border-color: #ffd700;
+    background: rgba(255, 215, 0, 0.05);
+  }
+  .pokemon-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .pokemon-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: #ffd700;
+  }
+  .pokemon-level {
+    font-size: 13px;
+    color: #aaa;
+  }
+  .pokemon-details {
+    display: none;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+  }
+  .pokemon-card.expanded .pokemon-details { display: block; }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+  }
+  .stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .stat-item label {
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .stat-item input {
+    padding: 6px 10px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 13px;
+  }
+  .stat-item select {
+    padding: 6px 10px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .stat-item select option {
+    background: #1e1e2e;
+    color: #e0e0e0;
+  }
+
+  /* 技能列表 */
+  .moves-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .move-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .modifier-pick-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    margin-bottom: 4px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.08);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .modifier-pick-item:hover {
+    background: rgba(74, 158, 255, 0.15);
+    border-color: rgba(74, 158, 255, 0.3);
+  }
+  .move-select {
+    flex: 1;
+    padding: 6px 10px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 13px;
+    cursor: pointer;
+    max-width: 280px;
+  }
+  .move-select option {
+    background: #1e1e2e;
+    color: #e0e0e0;
+  }
+  .move-details {
+    display: flex;
+    gap: 10px;
+    font-size: 12px;
+    color: #888;
+  }
+  .move-details input {
+    padding: 4px 6px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 12px;
+  }
+  .type-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #fff;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    min-width: 36px;
+    text-align: center;
+  }
+  .move-stats {
+    display: flex;
+    gap: 10px;
+    font-size: 11px;
+    color: #aaa;
+    margin-top: 4px;
+    flex-wrap: wrap;
+  }
+  .move-stats span {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .move-stats .stat-label {
+    color: #666;
+  }
+  .move-stats .stat-value {
+    color: #ddd;
+    font-weight: 600;
+  }
+  .btn-sm {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+
+  /* Fine Mode - JSON Editor */
+  .json-editor {
+    width: 100%;
+    min-height: 500px;
+    padding: 15px;
+    background: #0d1117;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    color: #c9d1d9;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    resize: vertical;
+  }
+  .json-editor:focus { outline: none; border-color: #4a9eff; }
+  .json-tools {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .json-status {
+    padding: 10px 15px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-top: 10px;
+    display: none;
+  }
+  .json-status.valid {
+    display: block;
+    background: rgba(46, 204, 113, 0.15);
+    color: #2ecc71;
+    border: 1px solid rgba(46, 204, 113, 0.3);
+  }
+  .json-status.invalid {
+    display: block;
+    background: rgba(231, 76, 60, 0.15);
+    color: #e74c3c;
+    border: 1px solid rgba(231, 76, 60, 0.3);
+  }
+
+  /* Status bar */
+  .status-bar {
+    margin-top: 15px;
+    padding: 10px 15px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 8px;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .status-bar .left { color: #aaa; }
+  .status-bar .right { color: #888; }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #666;
+  }
+  .empty-state svg {
+    width: 80px;
+    height: 80px;
+    margin-bottom: 20px;
+    opacity: 0.5;
+  }
+  .empty-state p { font-size: 16px; margin-bottom: 8px; }
+  .empty-state small { color: #555; }
+
+  .info-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    background: rgba(74, 158, 255, 0.2);
+    color: #4a9eff;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .section-divider {
+    height: 1px;
+    background: rgba(255,255,255,0.1);
+    margin: 20px 0;
+  }
+
+  .checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+  }
+  .checkbox-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🎮 Pokemon Rouge 存档修改器</h1>
+
+  <div class="toolbar">
+    <label class="btn btn-primary">
+      📂 加载存档文件
+      <input type="file" id="fileInput" accept=".prsv" multiple>
+    </label>
+    <button class="btn btn-success" id="saveBtn" disabled>💾 保存修改</button>
+    <button class="btn btn-warning" id="exportBtn" disabled>📤 导出JSON</button>
+    <button class="btn btn-danger" id="reloadBtn" disabled>🔄 重新加载</button>
+    <button class="btn btn-info" id="helpBtn">❓ 使用说明</button>
+    <span style="flex:1"></span>
+    <span class="info-badge">密钥: x0i2O7WRiANTqPmZ</span>
+  </div>
+
+  <!-- 使用说明弹窗 -->
+  <div id="helpModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; justify-content:center; align-items:center;">
+    <div class="modal-content" style="background:#1e1e2e; padding:30px; border-radius:12px; max-width:600px; max-height:80vh; overflow-y:auto; border:1px solid #4a9eff;">
+      <h2 style="color:#4a9eff; margin-top:0;">📖 使用说明</h2>
+      
+      <h3 style="color:#8b5cf6;">1. 修改存档</h3>
+      <ol style="line-height:1.8;">
+        <li>点击「加载存档文件」，选择 Save 文件夹中的 <code>.prsv</code> 文件</li>
+        <li>在「批量修改」「宝可梦编辑」或「精细编辑」中修改数据</li>
+        <li>点击「保存修改」，下载修改后的 <code>.prsv</code> 文件</li>
+      </ol>
+
+      <h3 style="color:#8b5cf6;">2. 将修改后的存档导入游戏</h3>
+      <p style="color:#f59e0b; font-weight:bold;">⚠ 推荐方式：游戏内导入</p>
+      <ol style="line-height:1.8;">
+        <li>启动游戏，进入标题画面</li>
+        <li>点击底部的「设置」图标 → 选择对应存档类型的「导入」</li>
+        <li>选择修改后的 <code>.prsv</code> 文件</li>
+        <li>确认导入后游戏会自动刷新</li>
+      </ol>
+
+      <p style="color:#f59e0b; font-weight:bold;">⚠ 备选方式：覆盖 Save 文件夹</p>
+      <ol style="line-height:1.8;">
+        <li>关闭游戏</li>
+        <li>将修改后的文件重命名为原文件名（如 <code>sessionData_Guest.prsv</code>）</li>
+        <li>覆盖 Save 文件夹中的对应文件</li>
+        <li>删除游戏浏览器数据（或按 F12 清除 localStorage）</li>
+        <li>重新启动游戏</li>
+      </ol>
+
+      <h3 style="color:#8b5cf6;">3. 存档文件说明</h3>
+      <ul style="line-height:1.8;">
+        <li><code>data_Guest.prsv</code> - 系统存档（图鉴、统计、奖券等）</li>
+        <li><code>sessionData_Guest.prsv</code> - 会话存档（当前游戏进度，槽位0）</li>
+        <li><code>sessionData1_Guest.prsv</code> - 会话存档槽位1</li>
+        <li><code>runHistoryData_Guest.prsv</code> - 通关历史记录</li>
+      </ul>
+
+      <h3 style="color:#ef4444;">4. 注意事项</h3>
+      <ul style="line-height:1.8;">
+        <li>修改前请备份原始存档文件</li>
+        <li>精细编辑模式下请谨慎修改，避免破坏数据结构</li>
+        <li>物种ID必须是有效的宝可梦编号</li>
+        <li>性格值范围为 0-24</li>
+        <li>等级需为正整数；无尽模式等级可超过 100</li>
+        <li>「图鉴编辑」仅修改 data 系统存档；可编辑捕获解锁、形态、闪光、蛋招式、特性和图鉴 IV</li>
+        <li>图鉴面板提供「一键解锁当前宝可梦」和「一键全解锁图鉴」；全解锁会覆盖图鉴 IV，并弹窗确认</li>
+        <li>「宝可梦编辑」中的本体形态与融合形态分别作用于 session 对局宝可梦</li>
+        <li>融合宝可梦可按名称选择；融合形态、特性和闪光等级会按对应宝可梦更新</li>
+        <li>融合自定义数据选择“使用默认”时会保留 -1 或 null，表示继承物种设置</li>
+      </ul>
+
+      <div style="text-align:center; margin-top:20px;">
+        <button class="btn btn-primary" onclick="document.getElementById('helpModal').style.display='none'">我知道了</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="file-tabs" id="fileTabs"></div>
+
+  <div class="editor-container" id="editorContainer" style="display:none;">
+    <div class="mode-tabs">
+      <div class="mode-tab active" data-mode="batch">⚡ 批量修改</div>
+      <div class="mode-tab" data-mode="dex">📖 图鉴编辑</div>
+      <div class="mode-tab" data-mode="pokemon">🐱 宝可梦编辑</div>
+      <div class="mode-tab" data-mode="items">🎒 对局道具</div>
+      <div class="mode-tab" data-mode="fine">🔧 精细编辑 (JSON)</div>
+    </div>
+
+    <!-- Batch Mode -->
+    <div class="panel active" id="batchPanel">
+      <div id="batchContent"></div>
+    </div>
+
+    <!-- Pokédex Mode -->
+    <div class="panel" id="dexPanel">
+      <div id="dexContent"></div>
+    </div>
+
+    <!-- Pokemon Mode -->
+    <div class="panel" id="pokemonPanel">
+      <div id="pokemonContent"></div>
+    </div>
+
+    <!-- Items Mode -->
+    <div class="panel" id="itemsPanel">
+      <div id="itemsContent"></div>
+    </div>
+
+    <!-- Fine Mode -->
+    <div class="panel" id="finePanel">
+      <div class="json-tools">
+        <button class="btn btn-primary" id="formatJsonBtn">📝 格式化JSON</button>
+        <button class="btn btn-warning" id="compressJsonBtn">📦 压缩JSON</button>
+        <button class="btn btn-success" id="validateJsonBtn">✅ 验证JSON</button>
+      </div>
+      <textarea class="json-editor" id="jsonEditor" spellcheck="false"></textarea>
+      <div class="json-status" id="jsonStatus"></div>
+    </div>
+  </div>
+
+  <div class="empty-state" id="emptyState">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="16" y1="13" x2="8" y2="13"/>
+      <line x1="16" y1="17" x2="8" y2="17"/>
+      <polyline points="10 9 9 9 8 9"/>
+    </svg>
+    <p>请加载 .prsv 存档文件开始编辑</p>
+    <small>支持 data_Guest.prsv, sessionData_Guest.prsv, runHistoryData_Guest.prsv</small>
+  </div>
+
+  <div class="status-bar" id="statusBar" style="display:none;">
+    <div class="left" id="statusLeft">就绪</div>
+    <div class="right" id="statusRight"></div>
+  </div>
+</div>
+
+<script>
+const SAVE_KEY = "x0i2O7WRiANTqPmZ";
+
+// ========== 翻译字典 ==========
+const TRANSLATIONS = {
+  // 游戏统计
+  gameStats: {
+    playTime: "游戏时间(秒)",
+    battles: "战斗次数",
+    classicSessionsPlayed: "经典模式游玩次数",
+    sessionsWon: "通关次数",
+    ribbonsOwned: "拥有缎带数",
+    dailyRunSessionsPlayed: "每日挑战游玩次数",
+    dailyRunSessionsWon: "每日挑战通关次数",
+    endlessSessionsPlayed: "无尽模式游玩次数",
+    highestEndlessWave: "无尽模式最高波数",
+    highestLevel: "最高等级",
+    highestMoney: "最高金钱",
+    highestDamage: "最高伤害",
+    highestHeal: "最高治疗量",
+    pokemonSeen: "见过的宝可梦",
+    pokemonDefeated: "击败的宝可梦",
+    pokemonCaught: "捕获的宝可梦",
+    pokemonHatched: "孵化的宝可梦",
+    subLegendaryPokemonSeen: "见过的准传说宝可梦",
+    subLegendaryPokemonCaught: "捕获的准传说宝可梦",
+    subLegendaryPokemonHatched: "孵化的准传说宝可梦",
+    legendaryPokemonSeen: "见过的传说宝可梦",
+    legendaryPokemonCaught: "捕获的传说宝可梦",
+    legendaryPokemonHatched: "孵化的传说宝可梦",
+    mythicalPokemonSeen: "见过的幻之宝可梦",
+    mythicalPokemonCaught: "捕获的幻之宝可梦",
+    mythicalPokemonHatched: "孵化的幻之宝可梦",
+    shinyPokemonSeen: "见过的闪光宝可梦",
+    shinyPokemonCaught: "捕获的闪光宝可梦",
+    shinyPokemonHatched: "孵化的闪光宝可梦",
+    pokemonFused: "合体宝可梦次数",
+    trainersDefeated: "击败的训练家数",
+    eggsPulled: "抽取蛋数",
+    rareEggsPulled: "稀有蛋抽取数",
+    epicEggsPulled: "史诗蛋抽取数",
+    legendaryEggsPulled: "传说蛋抽取数",
+    manaphyEggsPulled: "玛纳霏蛋抽取数"
+  },
+  // 奖券类型
+  voucherCounts: {
+    "0": "普通奖券 (REGULAR)",
+    "1": "高级奖券 (PLUS)",
+    "2": "珍贵奖券 (PREMIUM)",
+    "3": "黄金奖券 (GOLDEN)"
+  },
+  // 精灵球类型
+  pokeballCounts: {
+    "0": "精灵球 (Pokeball)",
+    "1": "超级球 (Great Ball)",
+    "2": "高级球 (Ultra Ball)",
+    "3": "盗贼球 (Rogue Ball)",
+    "4": "大师球 (Master Ball)",
+    "5": "豪华球 (Luxury Ball)"
+  },
+  // 性格
+  natures: {
+    "0": "勤奋 (Hardy) -",
+    "1": "孤僻 (Lonely) +攻击-防御",
+    "2": "勇敢 (Brave) +攻击-速度",
+    "3": "固执 (Adamant) +攻击-特攻",
+    "4": "调皮 (Naughty) +攻击-特防",
+    "5": "大胆 (Bold) +防御-攻击",
+    "6": "直率 (Docile) -",
+    "7": "悠闲 (Relaxed) +防御-速度",
+    "8": "淘气 (Impish) +防御-特攻",
+    "9": "无虑 (Lax) +防御-特防",
+    "10": "胆小 (Timid) +速度-攻击",
+    "11": "急躁 (Hasty) +速度-防御",
+    "12": "认真 (Serious) -",
+    "13": "开朗 (Jolly) +速度-特攻",
+    "14": "天真 (Naive) +速度-特防",
+    "15": "内敛 (Modest) +特攻-攻击",
+    "16": "温和 (Mild) +特攻-防御",
+    "17": "冷静 (Quiet) +特攻-速度",
+    "18": "害羞 (Bashful) -",
+    "19": "马虎 (Rash) +特攻-特防",
+    "20": "沉着 (Calm) +特防-攻击",
+    "21": "温顺 (Gentle) +特防-防御",
+    "22": "狂妄 (Sassy) +特防-速度",
+    "23": "慎重 (Careful) +特防-特攻",
+    "24": "浮躁 (Quirky) -"
+  },
+  // 游戏模式 (改版 GameMode 枚举：0..12)
+  gameModes: {
+    "0": "经典模式",
+    "1": "无尽模式",
+    "2": "融合无尽模式",
+    "3": "随机挑战 (每日)",
+    "4": "挑战模式",
+    "5": "八大师模式",
+    "6": "火箭队模式",
+    "7": "高种族值挑战",
+    "8": "挥指模式",
+    "9": "双打挑战",
+    "10": "PT搜打撤模式",
+    "11": "P5X模式",
+    "12": "二游模式"
+  }
+};
+
+// 获取宝可梦名称
+function getPokemonName(speciesId) {
+  if (!speciesId) return "未知";
+  const id = parseInt(speciesId);
+  if (typeof SPECIES_NAMES !== 'undefined' && SPECIES_NAMES[id]) {
+    return SPECIES_NAMES[id];
+  }
+  return `#${id} 未知`;
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[char]);
+}
+
+// 获取翻译
+function t(category, key) {
+  const dict = TRANSLATIONS[category];
+  if (dict && dict[key] !== undefined) {
+    return dict[key];
+  }
+  return key;
+}
+
+// 存档文件数据存储
+const saveFiles = {}; // { filename: { raw: string, data: object, dirty: boolean } }
+let currentFile = null;
+let currentMode = 'batch';
+let currentDexSpecies = 386;
+
+// DOM元素
+const fileInput = document.getElementById('fileInput');
+const fileTabs = document.getElementById('fileTabs');
+const editorContainer = document.getElementById('editorContainer');
+const emptyState = document.getElementById('emptyState');
+const statusBar = document.getElementById('statusBar');
+const statusLeft = document.getElementById('statusLeft');
+const statusRight = document.getElementById('statusRight');
+const saveBtn = document.getElementById('saveBtn');
+const exportBtn = document.getElementById('exportBtn');
+const reloadBtn = document.getElementById('reloadBtn');
+const jsonEditor = document.getElementById('jsonEditor');
+const jsonStatus = document.getElementById('jsonStatus');
+
+// 解密函数
+function decryptSaveData(encryptedText) {
+  try {
+    // 尝试 AES 解密
+    const bytes = CryptoJS.AES.decrypt(encryptedText, SAVE_KEY);
+    const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+    if (decrypted) {
+      return JSON.parse(decrypted);
+    }
+  } catch (e) {
+    // 尝试 base64 解码（bypassLogin 模式）
+    try {
+      const decoded = decodeURIComponent(atob(encryptedText.trim()));
+      return JSON.parse(decoded);
+    } catch (e2) {
+      throw new Error('解密失败: ' + e.message);
+    }
+  }
+  throw new Error('解密失败: 无法解析数据');
+}
+
+// 加密函数
+function encryptSaveData(data) {
+  const jsonStr = JSON.stringify(data);
+  return CryptoJS.AES.encrypt(jsonStr, SAVE_KEY).toString();
+}
+
+// 加载文件
+fileInput.addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files);
+  for (const file of files) {
+    try {
+      const text = await file.text();
+      const data = decryptSaveData(text);
+      // 加载时自动修复 modifier 数据
+      const repaired = repairModifiers(data);
+      saveFiles[file.name] = {
+        raw: text,
+        data: data,
+        dirty: repaired > 0, // 有修复则标记为脏
+        originalData: JSON.parse(JSON.stringify(data))
+      };
+      if (repaired > 0) {
+        console.log(`[${file.name}] 加载时修复了 ${repaired} 个 modifier`);
+      }
+      setStatus(`已加载: ${file.name}${repaired > 0 ? ` (自动修复${repaired}个道具)` : ''}`, repaired > 0 ? 'warning' : 'success');
+    } catch (err) {
+      setStatus(`加载失败 ${file.name}: ${err.message}`, 'error');
+    }
+  }
+  renderFileTabs();
+  if (Object.keys(saveFiles).length > 0) {
+    if (!currentFile || !saveFiles[currentFile]) {
+      switchFile(Object.keys(saveFiles)[0]);
+    }
+    emptyState.style.display = 'none';
+    editorContainer.style.display = 'block';
+    statusBar.style.display = 'flex';
+    saveBtn.disabled = false;
+    exportBtn.disabled = false;
+    reloadBtn.disabled = false;
+  }
+});
+
+// 切换文件
+function switchFile(filename) {
+  // 保存当前JSON编辑器内容
+  if (currentFile && currentMode === 'fine') {
+    applyJsonEditor();
+  }
+  currentFile = filename;
+  renderFileTabs();
+  renderCurrentFile();
+}
+
+// 渲染文件标签
+function renderFileTabs() {
+  fileTabs.innerHTML = '';
+  for (const filename of Object.keys(saveFiles)) {
+    const tab = document.createElement('div');
+    tab.className = 'file-tab' + (filename === currentFile ? ' active' : '') + (saveFiles[filename].dirty ? ' dirty' : '');
+    tab.innerHTML = `📄 ${filename}<span class="dirty-dot"></span>`;
+    tab.onclick = () => switchFile(filename);
+    fileTabs.appendChild(tab);
+  }
+}
+
+// 渲染当前文件
+function renderCurrentFile() {
+  if (!currentFile || !saveFiles[currentFile]) return;
+  const file = saveFiles[currentFile];
+
+  // 更新状态
+  const dataType = detectDataType(file.data);
+  statusRight.textContent = `数据类型: ${dataType}`;
+
+  // 渲染各面板
+  renderBatchPanel();
+  renderDexPanel();
+  renderPokemonPanel();
+  renderFinePanel();
+}
+
+// 检测数据类型
+function detectDataType(data) {
+  if (data.trainerId !== undefined && data.dexData !== undefined) return '系统存档 (SystemSaveData)';
+  if (data.seed !== undefined && data.party !== undefined) return '会话存档 (SessionSaveData)';
+  if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
+    const keys = Object.keys(data);
+    if (keys.length > 0) {
+      const firstVal = data[keys[0]];
+      if (firstVal && typeof firstVal === 'object' && firstVal.entry !== undefined && firstVal.isVictory !== undefined) {
+        return '历史记录 (RunHistoryData)';
+      }
+    }
+  }
+  return '未知类型';
+}
+
+// 批量修改面板
+function renderBatchPanel() {
+  if (!currentFile) return;
+  const file = saveFiles[currentFile];
+  const data = file.data;
+  const content = document.getElementById('batchContent');
+
+  let html = '';
+
+  // 系统存档 - 批量修改项
+  if (data.trainerId !== undefined) {
+    html += `
+      <div class="batch-section">
+        <h3>👤 训练师信息</h3>
+        <div class="batch-grid">
+          <div class="batch-item">
+            <label>训练师ID</label>
+            <input type="number" id="batch_trainerId" value="${data.trainerId || 0}">
+            <span class="current-value">当前: ${data.trainerId || 0}</span>
+          </div>
+          <div class="batch-item">
+            <label>秘密ID</label>
+            <input type="number" id="batch_secretId" value="${data.secretId || 0}">
+            <span class="current-value">当前: ${data.secretId || 0}</span>
+          </div>
+          <div class="batch-item">
+            <label>游戏版本</label>
+            <input type="text" id="batch_gameVersion" value="${data.gameVersion || ''}">
+            <span class="current-value">当前: ${data.gameVersion || ''}</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // 游戏统计
+    if (data.gameStats) {
+      html += `<div class="batch-section"><h3>📊 游戏统计</h3><div class="batch-grid">`;
+      for (const [key, value] of Object.entries(data.gameStats)) {
+        if (typeof value === 'number') {
+          html += `
+            <div class="batch-item">
+              <label>${t('gameStats', key)}</label>
+              <input type="number" id="batch_gameStats_${key}" value="${value}">
+              <span class="current-value">当前: ${value}</span>
+            </div>
+          `;
+        }
+      }
+      html += `</div></div>`;
+    }
+
+    // 货币/奖券
+    if (data.voucherCounts) {
+      html += `<div class="batch-section"><h3>🎟️ 奖券数量</h3><div class="batch-grid">`;
+      for (const [key, value] of Object.entries(data.voucherCounts)) {
+        if (typeof value === 'number') {
+          html += `
+            <div class="batch-item">
+              <label>${t('voucherCounts', key)}</label>
+              <input type="number" id="batch_voucherCounts_${key}" value="${value}">
+              <span class="current-value">当前: ${value}</span>
+            </div>
+          `;
+        }
+      }
+      html += `</div>
+        <div class="batch-actions">
+          <button class="btn btn-warning" onclick="batchMaxVouchers()">💰 全部拉满 (9999)</button>
+        </div>
+      </div>`;
+    }
+
+    // 解锁项
+    if (data.unlocks) {
+      html += `
+        <div class="batch-section">
+          <h3>🔓 解锁内容</h3>
+          <div class="batch-actions">
+            <button class="btn btn-success" onclick="batchUnlockAll()">✨ 全部解锁</button>
+            <button class="btn btn-danger" onclick="batchLockAll()">🔒 全部锁定</button>
+          </div>
+          <div style="margin-top:10px; font-size:12px; color:#888;">
+            已解锁: ${Object.values(data.unlocks).filter(v => v).length} / ${Object.keys(data.unlocks).length}
+          </div>
+        </div>
+      `;
+    }
+
+    // 成就
+    if (data.achvUnlocks) {
+      html += `
+        <div class="batch-section">
+          <h3>🏆 成就</h3>
+          <div class="batch-actions">
+            <button class="btn btn-success" onclick="batchAchvAll()">✨ 全部完成</button>
+          </div>
+          <div style="margin-top:10px; font-size:12px; color:#888;">
+            已完成: ${Object.values(data.achvUnlocks).filter(v => v > 0).length} / ${Object.keys(data.achvUnlocks).length}
+          </div>
+        </div>
+      `;
+    }
+
+    // 蛋
+    if (data.eggs) {
+      html += `
+        <div class="batch-section">
+          <h3>🥚 蛋 (${data.eggs.length}个)</h3>
+          <div class="batch-actions">
+            <button class="btn btn-warning" onclick="batchHatchAllEggs()">🐣 一场后孵化</button>
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  // 会话存档 - 批量修改项
+  if (data.seed !== undefined && data.party !== undefined) {
+    html += `
+      <div class="batch-section">
+        <h3>🏃 游戏进度</h3>
+        <div class="batch-grid">
+          <div class="batch-item">
+            <label>金钱</label>
+            <input type="number" id="batch_money" value="${data.money || 0}">
+            <span class="current-value">当前: ${data.money || 0}</span>
+          </div>
+          <div class="batch-item">
+            <label>分数</label>
+            <input type="number" id="batch_score" value="${data.score || 0}">
+            <span class="current-value">当前: ${data.score || 0}</span>
+          </div>
+          <div class="batch-item">
+            <label>波数 (Wave)</label>
+            <input type="number" id="batch_waveIndex" value="${data.waveIndex || 0}">
+            <span class="current-value">当前: ${data.waveIndex || 0}</span>
+          </div>
+          <div class="batch-item">
+            <label>游戏时间(秒)</label>
+            <input type="number" id="batch_playTime" value="${data.playTime || 0}">
+            <span class="current-value">当前: ${Math.floor((data.playTime || 0) / 60)} 分钟</span>
+          </div>
+          <div class="batch-item">
+            <label>种子</label>
+            <input type="text" id="batch_seed" value="${data.seed || ''}">
+            <span class="current-value">当前: ${data.seed || ''}</span>
+          </div>
+          <div class="batch-item">
+            <label>运行名称</label>
+            <input type="text" id="batch_name" value="${data.name || ''}">
+            <span class="current-value">当前: ${data.name || '未命名'}</span>
+          </div>
+        </div>
+        <div class="batch-actions">
+          <button class="btn btn-warning" onclick="batchMaxMoney()">💰 金钱拉满 (999999)</button>
+          <button class="btn btn-primary" onclick="batchHealAll()">💚 全队满血</button>
+          <button class="btn btn-success" onclick="batchMaxAllPokemon()">⭐ 全队满级满个体</button>
+        </div>
+      </div>
+    `;
+
+    // 精灵球
+    if (data.pokeballCounts) {
+      html += `<div class="batch-section"><h3>⚪ 精灵球数量</h3><div class="batch-grid">`;
+      for (const [key, value] of Object.entries(data.pokeballCounts)) {
+        if (typeof value === 'number') {
+          html += `
+            <div class="batch-item">
+              <label>${t('pokeballCounts', key)}</label>
+              <input type="number" id="batch_pokeballCounts_${key}" value="${value}">
+              <span class="current-value">当前: ${value}</span>
+            </div>
+          `;
+        }
+      }
+      html += `</div>
+        <div class="batch-actions">
+          <button class="btn btn-warning" onclick="batchMaxPokeballs()">⚪ 全部拉满 (999)</button>
+        </div>
+      </div>`;
+    }
+
+    // 队伍信息
+    const partySummary = (data.party || []).map((pkm, i) => {
+      const sid = typeof pkm.species === 'number' ? pkm.species : (pkm.species?.speciesId || 0);
+      return `#${i + 1} ${getPokemonName(sid)} Lv.${pkm.level || 1}`;
+    }).join('、');
+    html += `
+      <div class="batch-section">
+        <h3>🐱 队伍宝可梦 (${data.party?.length || 0}/6)</h3>
+        <p style="font-size:13px; color:#ccc; margin-bottom:10px;">${partySummary || '暂无宝可梦'}</p>
+        <p style="font-size:13px; color:#aaa;">切换到「宝可梦编辑」标签页进行详细编辑</p>
+      </div>
+    `;
+  }
+
+  // 历史记录
+  const dataKeys = Object.keys(data);
+  const isHistoryData = dataKeys.length > 0 && data[dataKeys[0]]?.entry !== undefined && data[dataKeys[0]]?.isVictory !== undefined;
+  if (typeof data === 'object' && data !== null && !Array.isArray(data) && isHistoryData) {
+    const count = dataKeys.length;
+    html += `
+      <div class="batch-section">
+        <h3>📜 历史记录</h3>
+        <p style="font-size:14px; color:#ccc;">共 ${count} 条记录</p>
+        <div class="batch-actions" style="margin-top:10px;">
+          <button class="btn btn-danger" onclick="batchClearHistory()">🗑️ 清空历史</button>
+        </div>
+      </div>
+    `;
+  }
+
+  // 通用批量操作
+  html += `
+    <div class="batch-section" style="border-left-color: #f39c12;">
+      <h3>⚡ 快捷操作</h3>
+      <div class="batch-actions">
+        <button class="btn btn-primary" onclick="applyBatchChanges()">✅ 应用批量修改</button>
+        <button class="btn btn-danger" onclick="resetToOriginal()">↩️ 恢复原始数据</button>
+      </div>
+    </div>
+  `;
+
+  content.innerHTML = html;
+}
+
+// 图鉴编辑面板
+const DEX_ATTRIBUTE_BITS = [
+  { bit: 1, label: '非闪光' },
+  { bit: 2, label: '闪光' },
+  { bit: 4, label: '雄性' },
+  { bit: 8, label: '雌性' },
+  { bit: 16, label: '普通变体' },
+  { bit: 32, label: '稀有变体' },
+  { bit: 64, label: '史诗变体' },
+];
+const DEX_FORM_BASE_BIT = 128;
+const SPECIES_EGG_MOVE_IDS = {
+  386: [878, 558, 575, 855],
+};
+
+function isCompressedRecord(record) {
+  return !!record && typeof record === 'object'
+    && Object.keys(record).some(key => key.startsWith('$'));
+}
+
+function getSaveField(record, expandedKey, compressedKey) {
+  if (Object.prototype.hasOwnProperty.call(record, compressedKey)) return compressedKey;
+  if (Object.prototype.hasOwnProperty.call(record, expandedKey)) return expandedKey;
+  return isCompressedRecord(record) ? compressedKey : expandedKey;
+}
+
+function readSaveField(record, expandedKey, compressedKey, fallback) {
+  const key = getSaveField(record, expandedKey, compressedKey);
+  return record?.[key] ?? fallback;
+}
+
+function toDexMask(value) {
+  try {
+    if (typeof value === 'bigint') return value;
+    if (typeof value === 'string' && /^\d+$/.test(value)) return BigInt(value);
+    if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return BigInt(value);
+  } catch (error) {
+    console.warn('无法读取图鉴位掩码:', error);
+  }
+  return 0n;
+}
+
+function storeDexMask(record, expandedKey, compressedKey, mask) {
+  const key = getSaveField(record, expandedKey, compressedKey);
+  record[key] = mask <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(mask) : mask.toString();
+}
+
+function dexBitEnabled(mask, bit) {
+  return (mask & BigInt(bit)) !== 0n;
+}
+
+function renderDexPanel() {
+  const content = document.getElementById('dexContent');
+  if (!currentFile || !content) return;
+  const data = saveFiles[currentFile].data;
+  if (!data.dexData || data.trainerId === undefined) {
+    content.innerHTML = '<div class="empty-state" style="padding:40px;"><p>图鉴编辑仅适用于 data 系统存档</p></div>';
+    return;
+  }
+
+  const speciesIds = Object.keys(SPECIES_NAMES || {})
+    .map(Number)
+    .filter(id => Number.isInteger(id) && id > 0)
+    .sort((a, b) => a - b);
+  if (!speciesIds.includes(currentDexSpecies)) {
+    currentDexSpecies = speciesIds.includes(386) ? 386 : (speciesIds[0] || 1);
+  }
+
+  content.innerHTML = `
+    <div class="batch-section">
+      <h3>📖 图鉴与初始宝可梦解锁</h3>
+      <div class="batch-grid">
+        <div class="batch-item">
+          <label for="dexSpeciesSearch">宝可梦（可输入编号或名称搜索）</label>
+          <input id="dexSpeciesSearch" list="dexSpeciesOptions" value="#${currentDexSpecies} ${escapeHtml(getPokemonName(currentDexSpecies))}" onchange="selectDexSpecies(this.value)">
+          <datalist id="dexSpeciesOptions">
+            ${speciesIds.map(id => `<option value="#${id} ${escapeHtml(getPokemonName(id))}"></option>`).join('')}
+          </datalist>
+        </div>
+      </div>
+      <div class="batch-actions" style="margin-bottom:12px;">
+        <button class="btn btn-success" onclick="unlockCurrentDexSpecies()">✨ 一键解锁当前宝可梦</button>
+        <button class="btn btn-warning" onclick="unlockAllDexSpecies()">🌟 一键全解锁图鉴</button>
+      </div>
+      <div id="dexSpeciesEditor">${renderDexSpeciesEditor(data, currentDexSpecies)}</div>
+    </div>
+  `;
+}
+
+function selectDexSpecies(value) {
+  const match = String(value).match(/^\s*#?\s*(\d+)/);
+  const id = match ? Number(match[1]) : 0;
+  if (!Number.isInteger(id) || !SPECIES_NAMES[id]) {
+    setStatus('未找到该宝可梦，请从列表中选择有效物种。', 'error');
+    return;
+  }
+  currentDexSpecies = id;
+  renderDexPanel();
+}
+
+function renderDexSpeciesEditor(data, speciesId) {
+  const dexData = data.dexData;
+  const dexEntry = dexData[String(speciesId)] || {};
+  const starterEntry = data.starterData?.[String(speciesId)] || {};
+  const caughtAttr = toDexMask(readSaveField(dexEntry, 'caughtAttr', '$ca', 0));
+  const eggMoves = Number(readSaveField(starterEntry, 'eggMoves', '$em', 0)) || 0;
+  const abilityAttr = Number(readSaveField(starterEntry, 'abilityAttr', '$a', 0)) || 0;
+  const passiveAttr = Number(readSaveField(starterEntry, 'passiveAttr', '$pa', 0)) || 0;
+  const ivs = readSaveField(dexEntry, 'ivs', '$i', []);
+  const speciesAbilities = SPECIES_ABILITIES?.[speciesId];
+  const formNames = POKEMON_FORM_NAMES?.[speciesId] || {};
+  const eggMoveIds = SPECIES_EGG_MOVE_IDS[speciesId] || [];
+  const eggMoveChecks = Array.from({ length: 4 }, (_, index) => {
+    const moveId = eggMoveIds[index];
+    const moveName = moveId == null ? '' : (MOVE_NAMES[moveId] || `技能#${moveId}`);
+    return `<label class="checkbox-item">
+      <input type="checkbox" data-dex-egg-move="${index}" ${eggMoves & (1 << index) ? 'checked' : ''}>
+      <span>蛋招式 ${index + 1}${moveName ? `：${escapeHtml(moveName)}` : ''}</span>
+    </label>`;
+  }).join('');
+  const formChecks = Array.from({ length: 32 }, (_, index) => {
+    const bit = DEX_FORM_BASE_BIT * (2 ** index);
+    const label = formNames[index] || (index === 0 ? '普通形态' : `形态 ${index}`);
+    return `<label class="checkbox-item">
+      <input type="checkbox" data-dex-form="${index}" ${dexBitEnabled(caughtAttr, bit) ? 'checked' : ''}>
+      <span>${escapeHtml(label)}</span>
+    </label>`;
+  }).join('');
+  const abilityOptions = [
+    { index: 0, bit: 1, name: speciesAbilities ? ABILITY_NAMES[speciesAbilities.ability1] : '第一特性' },
+    { index: 1, bit: 2, name: speciesAbilities?.ability2 ? ABILITY_NAMES[speciesAbilities.ability2] : null },
+    { index: 2, bit: 4, name: speciesAbilities?.abilityHidden ? ABILITY_NAMES[speciesAbilities.abilityHidden] : null },
+  ].filter(option => option.name);
+  const abilityChecks = abilityOptions.map(option => `<label class="checkbox-item">
+    <input type="checkbox" data-dex-ability="${option.index}" ${abilityAttr & option.bit ? 'checked' : ''}>
+    <span>${escapeHtml(option.name || `特性 ${option.index + 1}`)}</span>
+  </label>`).join('');
+
+  return `
+    <div class="section-divider"></div>
+    <h4 style="margin-bottom:10px; color:#4a9eff;">🔓 捕获与图鉴属性</h4>
+    <div class="batch-grid">
+      ${DEX_ATTRIBUTE_BITS.map(({ bit, label }) => `<label class="checkbox-item">
+        <input type="checkbox" data-dex-attribute="${bit}" ${dexBitEnabled(caughtAttr, bit) ? 'checked' : ''}>
+        <span>${label}</span>
+      </label>`).join('')}
+    </div>
+    <details style="margin-top:14px;">
+      <summary style="cursor:pointer; color:#9dd5ff;">形态解锁（按游戏图鉴形态索引；支持 0–31）</summary>
+      <div class="batch-grid" style="margin-top:12px;">${formChecks}</div>
+      <div style="margin-top:8px; color:#888; font-size:11px;">只勾选该宝可梦实际存在的形态索引；不存在的索引可能会被游戏忽略或清理。</div>
+    </details>
+    <div class="section-divider"></div>
+    <h4 style="margin-bottom:10px; color:#4a9eff;">🥚 蛋招式解锁</h4>
+    <div class="batch-grid">${eggMoveChecks}</div>
+    <div class="section-divider"></div>
+    <h4 style="margin-bottom:10px; color:#4a9eff;">✨ 特性解锁</h4>
+    <div class="batch-grid">
+      ${abilityChecks || '<span style="color:#888;">没有可用的特性映射数据</span>'}
+      <label class="checkbox-item">
+        <input type="checkbox" data-dex-passive ${passiveAttr & 1 ? 'checked' : ''}>
+        <span>被动特性</span>
+      </label>
+    </div>
+    <div class="section-divider"></div>
+    <h4 style="margin-bottom:10px; color:#4a9eff;">📊 图鉴记录个体值（IV，0–31）</h4>
+    <div class="stat-grid">
+      ${['HP', '攻击', '防御', '特攻', '特防', '速度'].map((label, index) => `
+        <div class="stat-item"><label>${label}</label>
+          <input type="number" min="0" max="31" data-dex-iv="${index}" value="${Number(ivs?.[index]) || 0}">
+        </div>
+      `).join('')}
+    </div>
+    <div class="batch-actions">
+      <button class="btn btn-success" onclick="applyDexChanges()">✅ 应用此宝可梦的图鉴修改</button>
+      <button class="btn btn-warning" onclick="maxDexIVs()">🌟 图鉴个体值全满</button>
+    </div>
+    ${speciesId === 386 ? '<div style="margin-top:10px; color:#888; font-size:12px;">代欧奇希斯的四种形态和四个蛋招式已按游戏资料标注。图鉴解锁只影响 data 存档；对局中的本体/融合形态仍在「宝可梦编辑」中修改。</div>' : ''}
+  `;
+}
+
+function applyDexChanges() {
+  if (!currentFile) return;
+  const data = saveFiles[currentFile].data;
+  const search = document.getElementById('dexSpeciesSearch');
+  const match = search?.value.match(/^\s*#?\s*(\d+)/);
+  const speciesId = match ? Number(match[1]) : currentDexSpecies;
+  if (!Number.isInteger(speciesId) || !SPECIES_NAMES[speciesId]) {
+    setStatus('无法应用图鉴修改：宝可梦编号无效。', 'error');
+    return;
+  }
+  if (!data.dexData || typeof data.dexData !== 'object') {
+    setStatus('无法应用图鉴修改：当前文件不是 data 系统存档。', 'error');
+    return;
+  }
+
+  const compressedDex = Object.values(data.dexData).some(isCompressedRecord);
+  const dexEntry = data.dexData[String(speciesId)] || (data.dexData[String(speciesId)] = compressedDex
+    ? { $sa: 0, $ca: 0, $na: 0, $s: 0, $c: 0, $hc: 0, $i: [0, 0, 0, 0, 0, 0], ribbons: '0' }
+    : { seenAttr: 0, caughtAttr: 0, natureAttr: 0, seenCount: 0, caughtCount: 0, hatchedCount: 0, ivs: [0, 0, 0, 0, 0, 0], ribbons: '0' });
+  let caughtMask = toDexMask(readSaveField(dexEntry, 'caughtAttr', '$ca', 0));
+  let seenMask = toDexMask(readSaveField(dexEntry, 'seenAttr', '$sa', 0));
+  document.querySelectorAll('#dexSpeciesEditor [data-dex-attribute]').forEach(input => {
+    const bit = BigInt(Number(input.dataset.dexAttribute));
+    caughtMask = input.checked ? caughtMask | bit : caughtMask & ~bit;
+    if (input.checked) seenMask |= bit;
+  });
+  document.querySelectorAll('#dexSpeciesEditor [data-dex-form]').forEach(input => {
+    const bit = BigInt(DEX_FORM_BASE_BIT) << BigInt(Number(input.dataset.dexForm));
+    caughtMask = input.checked ? caughtMask | bit : caughtMask & ~bit;
+    if (input.checked) seenMask |= bit;
+  });
+  storeDexMask(dexEntry, 'caughtAttr', '$ca', caughtMask);
+  storeDexMask(dexEntry, 'seenAttr', '$sa', seenMask);
+
+  const compressedStarter = isCompressedRecord(data.starterData)
+    || Object.values(data.starterData || {}).some(isCompressedRecord)
+    || compressedDex;
+  if (!data.starterData || typeof data.starterData !== 'object') data.starterData = {};
+  const starterEntry = data.starterData[String(speciesId)] || (data.starterData[String(speciesId)] = compressedStarter
+    ? { $m: null, $em: 0, $x: 0, $f: 0, $a: 0, $pa: 0, $vr: 0, $wc: 0 }
+    : { moveset: null, eggMoves: 0, candyCount: 0, friendship: 0, abilityAttr: 0, passiveAttr: 0, valueReduction: 0, classicWinCount: 0 });
+  const eggKey = getSaveField(starterEntry, 'eggMoves', '$em');
+  let eggMoves = Number(starterEntry[eggKey]) || 0;
+  document.querySelectorAll('#dexSpeciesEditor [data-dex-egg-move]').forEach(input => {
+    const bit = 1 << Number(input.dataset.dexEggMove);
+    eggMoves = input.checked ? eggMoves | bit : eggMoves & ~bit;
+  });
+  starterEntry[eggKey] = eggMoves;
+
+  const abilityKey = getSaveField(starterEntry, 'abilityAttr', '$a');
+  let abilityAttr = Number(starterEntry[abilityKey]) || 0;
+  document.querySelectorAll('#dexSpeciesEditor [data-dex-ability]').forEach(input => {
+    const bit = 1 << Number(input.dataset.dexAbility);
+    abilityAttr = input.checked ? abilityAttr | bit : abilityAttr & ~bit;
+  });
+  starterEntry[abilityKey] = abilityAttr;
+  const passiveKey = getSaveField(starterEntry, 'passiveAttr', '$pa');
+  starterEntry[passiveKey] = document.querySelector('#dexSpeciesEditor [data-dex-passive]')?.checked ? 1 : 0;
+
+  const ivKey = getSaveField(dexEntry, 'ivs', '$i');
+  const ivs = Array.isArray(dexEntry[ivKey]) ? dexEntry[ivKey].slice(0, 6) : [];
+  document.querySelectorAll('#dexSpeciesEditor [data-dex-iv]').forEach(input => {
+    const value = Number(input.value);
+    ivs[Number(input.dataset.dexIv)] = Number.isFinite(value) ? Math.max(0, Math.min(31, Math.trunc(value))) : 0;
+  });
+  while (ivs.length < 6) ivs.push(0);
+  dexEntry[ivKey] = ivs;
+
+  currentDexSpecies = speciesId;
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+  setStatus(`已应用 #${speciesId} ${getPokemonName(speciesId)} 的图鉴、形态、蛋招式、特性和 IV 修改`, 'success');
+}
+
+function maxDexIVs() {
+  document.querySelectorAll('#dexSpeciesEditor [data-dex-iv]').forEach(input => { input.value = 31; });
+  applyDexChanges();
+}
+
+function getDexSpeciesIds(data) {
+  return [...new Set([
+    ...Object.keys(data.dexData || {}).map(Number),
+    ...Object.keys(data.starterData || {}).map(Number),
+    ...Object.keys(SPECIES_NAMES || {}).map(Number),
+  ])]
+    .filter(id => Number.isInteger(id) && id > 0)
+    .sort((a, b) => a - b);
+}
+
+function getAllDexFormMask() {
+  let mask = 0n;
+  for (let formIndex = 0; formIndex < 32; formIndex++) {
+    mask |= BigInt(DEX_FORM_BASE_BIT) << BigInt(formIndex);
+  }
+  return mask;
+}
+
+function createDexEntry(compressed) {
+  return compressed
+    ? { $sa: 0, $ca: 0, $na: 0, $s: 0, $c: 0, $hc: 0, $i: [0, 0, 0, 0, 0, 0], ribbons: '0' }
+    : { seenAttr: 0, caughtAttr: 0, natureAttr: 0, seenCount: 0, caughtCount: 0, hatchedCount: 0, ivs: [0, 0, 0, 0, 0, 0], ribbons: '0' };
+}
+
+function unlockDexSpecies(data, speciesId) {
+  const dexData = data.dexData;
+  const existingEntries = Object.values(dexData);
+  const compressedDex = existingEntries.some(isCompressedRecord);
+  const dexEntry = dexData[String(speciesId)] || (dexData[String(speciesId)] = createDexEntry(compressedDex));
+  const unlockMask = DEX_ATTRIBUTE_BITS.reduce((mask, { bit }) => mask | BigInt(bit), getAllDexFormMask());
+
+  storeDexMask(dexEntry, 'caughtAttr', '$ca', unlockMask);
+  storeDexMask(dexEntry, 'seenAttr', '$sa', unlockMask);
+  const natureKey = getSaveField(dexEntry, 'natureAttr', '$na');
+  dexEntry[natureKey] = (2 ** 25) - 1;
+  const seenCountKey = getSaveField(dexEntry, 'seenCount', '$s');
+  const caughtCountKey = getSaveField(dexEntry, 'caughtCount', '$c');
+  dexEntry[seenCountKey] = Math.max(Number(dexEntry[seenCountKey]) || 0, 1);
+  dexEntry[caughtCountKey] = Math.max(Number(dexEntry[caughtCountKey]) || 0, 1);
+  const ivKey = getSaveField(dexEntry, 'ivs', '$i');
+  dexEntry[ivKey] = [31, 31, 31, 31, 31, 31];
+
+  const starterEntry = data.starterData?.[String(speciesId)];
+  if (starterEntry) {
+    const eggKey = getSaveField(starterEntry, 'eggMoves', '$em');
+    const abilityKey = getSaveField(starterEntry, 'abilityAttr', '$a');
+    const passiveKey = getSaveField(starterEntry, 'passiveAttr', '$pa');
+    starterEntry[eggKey] = 15;
+    starterEntry[abilityKey] = 7;
+    starterEntry[passiveKey] = 1;
+  }
+}
+
+function unlockCurrentDexSpecies() {
+  if (!currentFile) return;
+  const data = saveFiles[currentFile].data;
+  if (!data.dexData || data.trainerId === undefined) {
+    setStatus('图鉴解锁仅适用于 data 系统存档。', 'error');
+    return;
+  }
+  const search = document.getElementById('dexSpeciesSearch');
+  const match = String(search?.value || '').match(/^\s*#?\s*(\d+)/);
+  const speciesId = match ? Number(match[1]) : currentDexSpecies;
+  if (!Number.isInteger(speciesId) || speciesId < 1 || (
+    SPECIES_NAMES[speciesId] === undefined
+    && data.dexData?.[String(speciesId)] === undefined
+    && data.starterData?.[String(speciesId)] === undefined
+  )) {
+    setStatus('未找到该宝可梦，请先从列表中选择有效物种。', 'error');
+    return;
+  }
+  unlockDexSpecies(data, speciesId);
+  currentDexSpecies = speciesId;
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+  renderDexPanel();
+  setStatus(`已一键解锁 #${speciesId} ${getPokemonName(speciesId)} 的图鉴属性、形态、性格、IV${data.starterData?.[String(speciesId)] ? '、蛋招式和特性' : ''}`, 'success');
+}
+
+function unlockAllDexSpecies() {
+  if (!currentFile) return;
+  const data = saveFiles[currentFile].data;
+  if (!data.dexData || data.trainerId === undefined) {
+    setStatus('图鉴解锁仅适用于 data 系统存档。', 'error');
+    return;
+  }
+  const speciesIds = getDexSpeciesIds(data);
+  if (speciesIds.length === 0) {
+    setStatus('未找到可编辑的图鉴物种。', 'error');
+    return;
+  }
+  if (!confirm(`将一键解锁 ${speciesIds.length} 种宝可梦的图鉴属性、形态索引、全部性格与满 IV；并为已存在的初始宝可梦记录解锁全部蛋招式、特性和被动。游戏只会显示该物种实际存在的形态。此操作会覆盖这些宝可梦的图鉴 IV，确定继续吗？`)) {
+    return;
+  }
+  for (const speciesId of speciesIds) {
+    unlockDexSpecies(data, speciesId);
+  }
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+  renderDexPanel();
+  setStatus(`已一键解锁全部图鉴，共 ${speciesIds.length} 种宝可梦。`, 'success');
+}
+
+function renderPokemonPanel() {
+  if (!currentFile) return;
+  const file = saveFiles[currentFile];
+  const data = file.data;
+  const content = document.getElementById('pokemonContent');
+
+  if (!data.party || !Array.isArray(data.party)) {
+    content.innerHTML = '<div class="empty-state" style="padding:40px;"><p>此存档文件不包含宝可梦队伍数据</p></div>';
+    return;
+  }
+
+  let html = '<div class="party-list">';
+  data.party.forEach((pkm, idx) => {
+    const speciesId = typeof pkm.species === 'number' ? pkm.species : (pkm.species?.speciesId || 0);
+    const pkmName = getPokemonName(speciesId);
+    const natureName = t('natures', String(pkm.nature ?? 0));
+    html += `
+      <div class="pokemon-card${idx === 0 ? ' expanded' : ''}" data-idx="${idx}">
+        <div class="pokemon-header" onclick="togglePokemonCard(${idx})" style="cursor:pointer;">
+          <div>
+            <span class="pokemon-name">#${speciesId} ${pkmName}${pkm.nickname ? ` (${escapeHtml(pkm.nickname)})` : ''}</span>
+            ${pkm.shiny ? ' ✨' : ''}
+          </div>
+          <div class="pokemon-level">Lv.${pkm.level || 1} | ${pkm.gender === 1 ? '♀' : pkm.gender === 0 ? '♂' : '?'} | ${natureName}</div>
+        </div>
+        <div class="pokemon-details">
+          <div class="stat-grid">
+            <div class="stat-item"><label>物种ID</label><input type="number" data-pkm="${idx}" data-field="species" data-refresh-species="true" value="${speciesId}"></div>
+            <div class="stat-item"><label>本体形态</label>
+              <select data-pkm="${idx}" data-field="formIndex">
+                ${renderFormOptions(pkm.species, pkm.formIndex)}
+              </select>
+            </div>
+            <div class="stat-item"><label>等级</label><input type="number" data-pkm="${idx}" data-field="level" value="${pkm.level || 1}"></div>
+            <div class="stat-item"><label>经验值</label><input type="number" data-pkm="${idx}" data-field="exp" value="${pkm.exp || 0}"></div>
+            <div class="stat-item"><label>性格</label>
+              <select data-pkm="${idx}" data-field="nature">
+                ${Object.entries(TRANSLATIONS.natures).map(([id, name]) => `
+                  <option value="${id}" ${pkm.nature == id ? 'selected' : ''}>${name}</option>
+                `).join('')}
+              </select>
+            </div>
+            <div class="stat-item"><label>性别 (0=雄 1=雌)</label><input type="number" data-pkm="${idx}" data-field="gender" value="${pkm.gender ?? 0}"></div>
+            <div class="stat-item"><label>闪光</label>
+              <select data-pkm="${idx}" data-field="shiny">
+                <option value="true" ${pkm.shiny ? 'selected' : ''}>是</option>
+                <option value="false" ${!pkm.shiny ? 'selected' : ''}>否</option>
+              </select>
+            </div>
+            <div class="stat-item"><label>闪光等级</label>
+              ${renderVariantSelect(idx, 'variant', pkm.variant)}
+            </div>
+            <div class="stat-item"><label>当前太晶类型</label>
+              ${renderTypeSelect(idx, 'teraType', pkm.teraType ?? 0, '一般', true)}
+            </div>
+            <div class="stat-item"><label>已太晶化</label>
+              <select data-pkm="${idx}" data-field="isTerastallized">
+                <option value="true" ${pkm.isTerastallized ? 'selected' : ''}>是（显示为单一太晶属性）</option>
+                <option value="false" ${!pkm.isTerastallized ? 'selected' : ''}>否</option>
+              </select>
+            </div>
+            <div class="stat-item"><label>昵称</label><input type="text" data-pkm="${idx}" data-field="nickname" value="${escapeHtml(pkm.nickname || '')}"></div>
+            <div class="stat-item"><label>亲密度</label><input type="number" data-pkm="${idx}" data-field="friendship" value="${pkm.friendship || 0}"></div>
+            <div class="stat-item"><label> Pokérus (病毒)</label>
+              <select data-pkm="${idx}" data-field="pokerus">
+                <option value="true" ${pkm.pokerus ? 'selected' : ''}>是</option>
+                <option value="false" ${!pkm.pokerus ? 'selected' : ''}>否</option>
+              </select>
+            </div>
+          </div>
+          <div class="section-divider"></div>
+          <h4 style="margin-bottom:10px; color:#4a9eff;">📊 个体值 (IVs)</h4>
+          <div class="stat-grid">
+            ${['hp', 'atk', 'def', 'spAtk', 'spDef', 'speed'].map((stat, i) => `
+              <div class="stat-item">
+                <label>${stat.toUpperCase()} (${pkm.ivs?.[i] ?? 0})</label>
+                <input type="number" min="0" max="31" data-pkm="${idx}" data-field="ivs.${i}" value="${pkm.ivs?.[i] ?? 0}">
+              </div>
+            `).join('')}
+          </div>
+          <div class="section-divider"></div>
+          <h4 style="margin-bottom:10px; color:#4a9eff;">❤️ 当前状态</h4>
+          <div class="stat-grid">
+            <div class="stat-item"><label>HP</label><input type="number" data-pkm="${idx}" data-field="hp" value="${pkm.hp || 0}"></div>
+            <div class="stat-item"><label>最大HP</label><input type="number" data-pkm="${idx}" data-field="maxHp" value="${pkm.maxHp || 0}"></div>
+            <div class="stat-item"><label>状态 (0=正常)</label><input type="number" data-pkm="${idx}" data-field="status" value="${pkm.status ?? 0}"></div>
+            <div class="stat-item"><label>睡眠回合</label><input type="number" data-pkm="${idx}" data-field="sleepTurns" value="${pkm.sleepTurns ?? 0}"></div>
+          </div>
+          <div class="section-divider"></div>
+          <h4 style="margin-bottom:10px; color:#4a9eff;">⚔️ 基础数值</h4>
+          <div class="stat-grid">
+            ${['atk', 'def', 'spAtk', 'spDef', 'speed'].map(stat => `
+              <div class="stat-item">
+                <label>${stat.toUpperCase()}</label>
+                <input type="number" data-pkm="${idx}" data-field="${stat}" value="${pkm[stat] || 0}">
+              </div>
+            `).join('')}
+          </div>
+          <div class="section-divider"></div>
+          <h4 style="margin-bottom:10px; color:#4a9eff;">✨ 特性</h4>
+          <div class="stat-grid"><div class="stat-item"><label>特性</label>
+            ${renderAbilitySelect(idx, pkm)}
+          </div></div>
+          <div class="stat-grid">
+            <div class="stat-item"><label>梦特 (被动特性)</label>
+              <select data-pkm="${idx}" data-field="passive" onchange="event.stopPropagation();">
+                <option value="false" ${!pkm.passive ? 'selected' : ''}>否</option>
+                <option value="true" ${pkm.passive ? 'selected' : ''}>是</option>
+              </select>
+            </div>
+          </div>
+          <div class="stat-item" style="margin-top:6px; color:#9dd5ff; font-size:12px;">
+            ${getPassiveHint(idx, pkm)}
+          </div>
+          <div class="section-divider"></div>
+          <h4 style="margin-bottom:10px; color:#4a9eff;">🧬 融合宝可梦</h4>
+          <div class="stat-grid">
+            <div class="stat-item"><label>融合宝可梦</label>
+              <select data-pkm="${idx}" data-field="fusionSpecies" data-refresh-species="true">
+                ${renderSpeciesOptions(pkm.fusionSpecies)}
+              </select>
+            </div>
+            <div class="stat-item"><label>融合形态</label>
+              <select data-pkm="${idx}" data-field="fusionFormIndex">
+                ${renderFormOptions(pkm.fusionSpecies, pkm.fusionFormIndex)}
+              </select>
+            </div>
+            <div class="stat-item"><label>融合特性</label>
+              ${renderAbilitySelect(idx, pkm, 'fusionAbilityIndex', pkm.fusionSpecies, '融合特性')}
+            </div>
+            <div class="stat-item"><label>融合闪光</label>
+              <select data-pkm="${idx}" data-field="fusionShiny">
+                <option value="true" ${pkm.fusionShiny ? 'selected' : ''}>是</option>
+                <option value="false" ${!pkm.fusionShiny ? 'selected' : ''}>否</option>
+              </select>
+            </div>
+            <div class="stat-item"><label>融合闪光等级</label>
+              ${renderVariantSelect(idx, 'fusionVariant', pkm.fusionVariant)}
+            </div>
+            <div class="stat-item"><label>融合宝可梦太晶类型</label>
+              ${renderTypeSelect(idx, 'fusionTeraType', pkm.fusionTeraType ?? 0, '一般', true)}
+            </div>
+          </div>
+          <h5 style="margin:12px 0 8px; color:#9dd5ff;">融合自定义数据（默认值表示使用物种默认设置）</h5>
+          ${renderCustomPokemonData(idx, pkm, pkm.fusionCustomPokemonData)}
+          <div style="margin-top:6px; color:#888; font-size:11px;">基础类型覆盖可实验性地选择太晶；这不是游戏正式支持的常规属性，线上版本可能忽略或改写该值。若只想获得游戏支持的单一太晶属性显示，请设置“当前太晶类型：太晶”并将“已太晶化”设为“是”；这会启用真实太晶化状态，战斗也会按单一太晶属性计算。</div>
+          <div style="margin-top:6px; color:#888; font-size:11px;">融合后的被动能力会写入游戏实际读取的被动覆盖字段；设置后自动启用被动能力。</div>
+          <div id="luck-summary-${idx}" style="margin-top:8px; color:#9dd5ff; font-size:12px;">${getPokemonLuckSummary(pkm)}</div>
+          <div class="section-divider"></div>
+          <h4 style="margin-bottom:10px; color:#4a9eff;">💫 技能 (${pkm.moveset?.length || 0}/4)</h4>
+          <div class="moves-list" data-pkm-moves="${idx}">
+            ${(pkm.moveset || []).map((move, moveIdx) => {
+              const moveInfo = (typeof MOVE_INFO !== 'undefined' && MOVE_INFO[move.moveId]) ? MOVE_INFO[move.moveId] : null;
+              const moveName = moveInfo ? moveInfo.name : (MOVE_NAMES[move.moveId] || `技能#${move.moveId}`);
+              const moveEffect = moveInfo ? moveInfo.effect : '';
+              return `<div class="move-item" data-move-idx="${moveIdx}" style="flex-wrap:wrap;">
+                <div style="flex:1; min-width:120px; cursor:pointer;" onclick="event.stopPropagation(); openMovePicker(${idx}, ${moveIdx})">
+                  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <span style="color:#4a9eff; font-weight:600;">${moveName}</span>
+                    ${moveInfo?.type ? getTypeBadge(moveInfo.type) : ''}
+                  </div>
+                  ${moveInfo ? getMoveStatsHtml(moveInfo) : ''}
+                  ${moveEffect ? `<div style="font-size:11px; color:#bbb; margin-top:4px; line-height:1.4;">${moveEffect}</div>` : ''}
+                </div>
+                <div class="move-details">
+                  <label>PP已用: <input type="number" min="0" data-pkm="${idx}" data-field="moveset.${moveIdx}.ppUsed" value="${move.ppUsed || 0}" style="width:50px;"></label>
+                  <label>PP强化: <input type="number" min="0" max="3" data-pkm="${idx}" data-field="moveset.${moveIdx}.ppUp" value="${move.ppUp || 0}" style="width:40px;"></label>
+                </div>
+                <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); removeMove(${idx}, ${moveIdx})" style="padding:4px 8px; font-size:12px;">✕</button>
+              </div>`;
+            }).join('')}
+            ${(pkm.moveset?.length || 0) < 4 ? `
+              <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); addMove(${idx})" style="width:100%; margin-top:8px;">➕ 添加技能</button>
+            ` : ''}
+          </div>
+          <div class="section-divider"></div>
+          <h4 style="margin-bottom:10px; color:#4a9eff;">🎒 携带物</h4>
+          ${renderHeldItems(idx, pkm)}
+          <div class="batch-actions" style="margin-top:15px;">
+            <button class="btn btn-success" onclick="event.stopPropagation(); maxPokemonIVs(${idx})">🌟 满个体值 (31)</button>
+            <button class="btn btn-primary" onclick="event.stopPropagation(); healPokemon(${idx})">💚 回复满血</button>
+            <button class="btn btn-warning" onclick="event.stopPropagation(); level100Pokemon(${idx})">💯 升到100级</button>
+            <button class="btn btn-danger" onclick="event.stopPropagation(); deletePokemon(${idx})">🗑️ 删除</button>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+  html += '</div>';
+
+  // 监听输入变化
+  setTimeout(() => {
+    document.querySelectorAll('#pokemonPanel input, #pokemonPanel select').forEach(input => {
+      input.addEventListener('change', () => {
+        // 携带物数量输入
+        if (input.dataset.modIdx !== undefined) {
+          const modIdx = parseInt(input.dataset.modIdx);
+          const modField = input.dataset.modField;
+          const data = saveFiles[currentFile].data;
+          if (data.modifiers && data.modifiers[modIdx] && modField === 'stackCount') {
+            data.modifiers[modIdx].stackCount = parseInt(input.value) || 1;
+            saveFiles[currentFile].dirty = true;
+            renderFileTabs();
+          }
+          return;
+        }
+        const refreshSpecies = input.dataset.refreshSpecies === 'true';
+        const speciesField = input.dataset.field;
+        const pokemonIndex = parseInt(input.dataset.pkm);
+        const previousSpecies = refreshSpecies && Number.isInteger(pokemonIndex)
+          ? getSpeciesId(saveFiles[currentFile].data.party[pokemonIndex]?.[speciesField])
+          : null;
+        const expandedCards = refreshSpecies
+          ? Array.from(document.querySelectorAll('.pokemon-card.expanded'))
+            .map(card => card.dataset.idx)
+          : [];
+        applyPokemonChanges();
+        if (refreshSpecies) {
+          const pokemon = saveFiles[currentFile].data.party[pokemonIndex];
+          if (pokemon && previousSpecies !== getSpeciesId(pokemon[speciesField])) {
+            if (speciesField === 'fusionSpecies') {
+              pokemon.fusionFormIndex = 0;
+              pokemon.fusionAbilityIndex = 0;
+            } else {
+              pokemon.formIndex = 0;
+              pokemon.abilityIndex = 0;
+            }
+          }
+          renderPokemonPanel();
+          expandedCards.forEach(idx => {
+            const card = document.querySelector(`.pokemon-card[data-idx="${idx}"]`);
+            if (card) card.classList.add('expanded');
+          });
+        }
+      });
+    });
+  }, 0);
+
+  content.innerHTML = html;
+}
+
+function togglePokemonCard(idx) {
+  const card = document.querySelector(`.pokemon-card[data-idx="${idx}"]`);
+  if (card) {
+    card.classList.toggle('expanded');
+  }
+}
+
+// 精细编辑面板
+function renderFinePanel() {
+  if (!currentFile) return;
+  const file = saveFiles[currentFile];
+  jsonEditor.value = JSON.stringify(file.data, null, 2);
+  jsonStatus.className = 'json-status';
+  jsonStatus.textContent = '';
+  jsonStatus.style.display = 'none';
+}
+
+// 应用JSON编辑器的内容
+function applyJsonEditor() {
+  if (!currentFile || currentMode !== 'fine') return;
+  try {
+    const parsed = JSON.parse(jsonEditor.value);
+    saveFiles[currentFile].data = parsed;
+    saveFiles[currentFile].dirty = true;
+    renderFileTabs();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// 模式切换
+document.querySelectorAll('.mode-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const mode = tab.dataset.mode;
+    // 保存当前模式的更改
+    if (currentMode === 'fine') {
+      applyJsonEditor();
+    }
+    currentMode = mode;
+    document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.getElementById(mode + 'Panel').classList.add('active');
+
+    if (mode === 'batch') renderBatchPanel();
+    if (mode === 'dex') renderDexPanel();
+    if (mode === 'pokemon') renderPokemonPanel();
+    if (mode === 'items') renderItemsPanel();
+    if (mode === 'fine') renderFinePanel();
+  });
+});
+
+// ============ 批量操作函数 ============
+
+function applyBatchChanges() {
+  if (!currentFile) return;
+  const file = saveFiles[currentFile];
+  const data = file.data;
+
+  // 系统存档字段
+  if (data.trainerId !== undefined) {
+    const tid = document.getElementById('batch_trainerId');
+    if (tid) data.trainerId = parseInt(tid.value) || 0;
+    const sid = document.getElementById('batch_secretId');
+    if (sid) data.secretId = parseInt(sid.value) || 0;
+    const gv = document.getElementById('batch_gameVersion');
+    if (gv) data.gameVersion = gv.value;
+  }
+
+  // gameStats
+  if (data.gameStats) {
+    for (const key of Object.keys(data.gameStats)) {
+      const el = document.getElementById(`batch_gameStats_${key}`);
+      if (el) data.gameStats[key] = parseInt(el.value) || 0;
+    }
+  }
+
+  // voucherCounts
+  if (data.voucherCounts) {
+    for (const key of Object.keys(data.voucherCounts)) {
+      const el = document.getElementById(`batch_voucherCounts_${key}`);
+      if (el) data.voucherCounts[key] = parseInt(el.value) || 0;
+    }
+  }
+
+  // 会话存档字段
+  if (data.seed !== undefined) {
+    const money = document.getElementById('batch_money');
+    if (money) data.money = parseInt(money.value) || 0;
+    const score = document.getElementById('batch_score');
+    if (score) data.score = parseInt(score.value) || 0;
+    const wave = document.getElementById('batch_waveIndex');
+    if (wave) data.waveIndex = parseInt(wave.value) || 0;
+    const pt = document.getElementById('batch_playTime');
+    if (pt) data.playTime = parseInt(pt.value) || 0;
+    const seed = document.getElementById('batch_seed');
+    if (seed) data.seed = seed.value;
+    const name = document.getElementById('batch_name');
+    if (name) data.name = name.value;
+  }
+
+  // pokeballCounts
+  if (data.pokeballCounts) {
+    for (const key of Object.keys(data.pokeballCounts)) {
+      const el = document.getElementById(`batch_pokeballCounts_${key}`);
+      if (el) data.pokeballCounts[key] = parseInt(el.value) || 0;
+    }
+  }
+
+  file.dirty = true;
+  renderFileTabs();
+  setStatus('批量修改已应用', 'success');
+  renderBatchPanel();
+}
+
+function batchMaxMoney() {
+  if (!currentFile) return;
+  saveFiles[currentFile].data.money = 999999;
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+  renderBatchPanel();
+  setStatus('金钱已拉满!', 'success');
+}
+
+function batchMaxVouchers() {
+  if (!currentFile) return;
+  const data = saveFiles[currentFile].data;
+  if (data.voucherCounts) {
+    for (const key of Object.keys(data.voucherCounts)) {
+      data.voucherCounts[key] = 9999;
+    }
+  }
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+  renderBatchPanel();
+  setStatus('奖券已全部拉满!', 'success');
+}
+
+function batchMaxPokeballs() {
+  if (!currentFile) return;
+  const data = saveFiles[currentFile].data;
+  if (data.pokeballCounts) {
+    for (const key of Object.keys(data.pokeballCounts)) {
+      data.pokeballCounts[key] = 999;
+    }
+  }
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+  renderBatchPanel();
+  setStatus('精灵球已全部拉满!', 'success');
+}
+
+function batchUnlockAll() {
+  if (!currentFile) return;
+  const data = saveFiles[currentFile].data;
+  if (data.unlocks) {
+    for (const key of Object.keys(data.unlocks)) {
+      data.unlocks[key] = true;
+    }
+  }
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+  renderBatchPanel();
+  setStatus('已全部解锁!', 'success');
+}
+
+function batchLockAll() {
+  if (!currentFile) return;
+  const data = saveFiles[currentFile].data;
+  if (data.unlocks) {
+    for (const key of Object.keys(data.unlocks)) {
+      data.unlocks[key] = false;
+    }
+  }
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+  renderBatchPanel();
+  setStatus('已全部锁定!', 'success');
+}
+
+function batchAchvAll() {
+  if (!currentFile) return;
+  const data = saveFiles[currentFile].data;
+  if (data.achvUnlocks) {
+    for (const key of Object.keys(data.achvUnlocks)) {
+      data.achvUnlocks[key] = 1;
+    }
+  }
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+  renderBatchPanel();
+  setStatus('成就已全部完成!', 'success');
+}
+
+function batchHealAll() {
+  if (!currentFile) return;
+  const data = saveFiles[currentFile].data;
+  if (data.party) {
+    data.party.forEach(p => {
+      p.hp = p.maxHp;
+      p.status = 0;
+      p.sleepTurns = 0;
+    });
+  }
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+  renderBatchPanel();
+  setStatus('全队已满血!', 'success');
+}
+
+function batchMaxAllPokemon() {
+  if (!currentFile) return;
+  const data = saveFiles[currentFile].data;
+  if (data.party) {
+    data.party.forEach(p => {
+      p.level = 100;
+      if (p.ivs) {
+        for (let i = 0; i < 6; i++) p.ivs[i] = 31;
+      }
+    });
+  }
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+  renderBatchPanel();
+  setStatus('全队已满级满个体!', 'success');
+}
+
+function batchHatchAllEggs() {
+  if (!currentFile) return;
+  const data = saveFiles[currentFile].data;
+  if (data.eggs) {
+    data.eggs.forEach(e => {
+      // 设置为还剩 1 波，打完一场战斗后孵化
+      e.hatchWaves = 1;
+    });
+  }
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+  renderBatchPanel();
+  setStatus('所有蛋将在一场战斗后孵化!', 'success');
+}
+
+function batchClearHistory() {
+  if (!currentFile) return;
+  if (!confirm('确定要清空所有历史记录吗？此操作不可撤销。')) return;
+  saveFiles[currentFile].data = {};
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+  renderBatchPanel();
+  setStatus('历史记录已清空', 'success');
+}
+
+function resetToOriginal() {
+  if (!currentFile) return;
+  if (!confirm('确定要恢复原始数据吗？所有未保存的修改将丢失。')) return;
+  const file = saveFiles[currentFile];
+  file.data = JSON.parse(JSON.stringify(file.originalData));
+  file.dirty = false;
+  renderFileTabs();
+  renderCurrentFile();
+  setStatus('已恢复原始数据', 'success');
+}
+
+// ============ 宝可梦编辑函数 ============
+
+function applyPokemonChanges() {
+  if (!currentFile) return;
+  const data = saveFiles[currentFile].data;
+  if (!data.party) return;
+
+  // 记录「空数组」形态的 types：改版本体以 length>0 判断是否有类型覆盖，
+  // 空数组与 null 语义等价但形态不同，这里保持原样以免无谓改写存档。
+  const emptyTypes = new Set();
+  data.party.forEach((pkm, i) => {
+    for (const key of ['customPokemonData', 'fusionCustomPokemonData']) {
+      if (Array.isArray(pkm?.[key]?.types) && pkm[key].types.length === 0) emptyTypes.add(i + ':' + key);
+    }
+  });
+
+  migrateFusionPassiveOverrides(data.party);
+
+  document.querySelectorAll('#pokemonPanel input, #pokemonPanel select').forEach(input => {
+    const idx = parseInt(input.dataset.pkm);
+    const field = input.dataset.field;
+    if (isNaN(idx) || !field || !data.party[idx]) return;
+
+    let value = input.value;
+    if (input.type === 'number' || input.tagName === 'SELECT') {
+      if (value === 'true') value = true;
+      else if (value === 'false') value = false;
+      else {
+        const parsed = parseInt(value);
+        // 物种ID至少为1，不允许设为0
+        if (field === 'species' && (isNaN(parsed) || parsed < 1)) return;
+        // 性格范围 0-24
+        if (field === 'nature' && (isNaN(parsed) || parsed < 0 || parsed > 24)) return;
+        // Endless-mode Pokémon may legitimately exceed level 100.
+        if (field === 'level' && (isNaN(parsed) || parsed < 1 || !Number.isSafeInteger(parsed))) return;
+        // 默认：如果解析失败则跳过，保持原值
+        if (isNaN(parsed)) return;
+        value = parsed;
+      }
+    }
+
+    // 设置嵌套字段（支持数组索引）
+    const parts = field.split('.');
+    let obj = data.party[idx];
+    for (let i = 0; i < parts.length - 1; i++) {
+      const key = parts[i];
+      const isArrayIndex = /^\d+$/.test(key);
+      const nextIsArrayIndex = /^\d+$/.test(parts[i + 1]);
+      if (obj[key] === undefined || obj[key] === null) {
+        obj[key] = nextIsArrayIndex ? [] : {};
+      }
+      obj = obj[key];
+    }
+    obj[parts[parts.length - 1]] = value;
+  });
+
+  // 确保 ivs 数组始终为 6 个元素
+  data.party.forEach((pkm, pkmIdx) => {
+    syncPokemonLuck(pkm);
+    if (pkm.customPokemonData?.passive != null && pkm.customPokemonData.passive !== -1) {
+      pkm.passive = true;
+    }
+    if (!pkm.ivs || !Array.isArray(pkm.ivs)) {
+      pkm.ivs = [0, 0, 0, 0, 0, 0];
+    }
+    while (pkm.ivs.length < 6) pkm.ivs.push(0);
+    if (pkm.ivs.length > 6) pkm.ivs = pkm.ivs.slice(0, 6);
+    // 确保 ivs 是有效数字 0-31
+    for (let i = 0; i < 6; i++) {
+      const v = parseInt(pkm.ivs[i]);
+      pkm.ivs[i] = isNaN(v) ? 0 : Math.max(0, Math.min(31, v));
+    }
+    for (const key of ['customPokemonData', 'fusionCustomPokemonData']) {
+      const customData = pkm[key];
+      if (!customData || !Array.isArray(customData.types)) continue;
+      // 改版本体约定：-1 (Type.UNKNOWN) = 该位置保持默认属性，0..N 为具体属性（官方 0-18，改版新增 19/CS）。
+      // 因此把「非整数」原子归一为 -1（而非 null），既保住改版属性，又不会让第二属性被写成 null。
+      const types = customData.types.slice(0, 2).map(type =>
+        Number.isInteger(type) ? type : -1
+      );
+      if (types.every(type => type === -1)) {
+        // 两个位置都是「默认」：原本为空数组则保持空数组，否则清空为 null（与旧行为一致）
+        customData.types = emptyTypes.has(pkmIdx + ':' + key) ? [] : null;
+      } else {
+        customData.types = types;
+      }
+    }
+  });
+
+  updatePokemonLuckSummaries(data.party);
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+}
+
+function maxPokemonIVs(idx) {
+  if (!currentFile) return;
+  const data = saveFiles[currentFile].data;
+  if (!data.party?.[idx]) return;
+  const pkm = data.party[idx];
+  if (!pkm.ivs) pkm.ivs = [0, 0, 0, 0, 0, 0];
+  for (let i = 0; i < 6; i++) pkm.ivs[i] = 31;
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+  renderPokemonPanel();
+  // 保持展开状态
+  setTimeout(() => {
+    const card = document.querySelector(`.pokemon-card[data-idx="${idx}"]`);
+    if (card) card.classList.add('expanded');
+  }, 0);
+  setStatus('个体值已拉满!', 'success');
+}
+
+function healPokemon(idx) {
+  if (!currentFile) return;
+  const data = saveFiles[currentFile].data;
+  if (!data.party?.[idx]) return;
+  const pkm = data.party[idx];
+  // HP 最大值在 stats[0] 中；如果 stats 不存在则不修改 hp
+  if (pkm.stats && pkm.stats[0] > 0) {
+    pkm.hp = pkm.stats[0];
+  }
+  pkm.status = null;
+  pkm.sleepTurns = 0;
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+  renderPokemonPanel();
+  setTimeout(() => {
+    const card = document.querySelector(`.pokemon-card[data-idx="${idx}"]`);
+    if (card) card.classList.add('expanded');
+  }, 0);
+  setStatus('宝可梦已恢复!', 'success');
+}
+
+function level100Pokemon(idx) {
+  if (!currentFile) return;
+  const data = saveFiles[currentFile].data;
+  if (!data.party?.[idx]) return;
+  data.party[idx].level = 100;
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+  renderPokemonPanel();
+  setTimeout(() => {
+    const card = document.querySelector(`.pokemon-card[data-idx="${idx}"]`);
+    if (card) card.classList.add('expanded');
+  }, 0);
+  setStatus('已升到100级!', 'success');
+}
+
+function deletePokemon(idx) {
+  if (!currentFile) return;
+  if (!confirm('确定要删除这只宝可梦吗？')) return;
+  const data = saveFiles[currentFile].data;
+  if (!data.party) return;
+  data.party.splice(idx, 1);
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+  renderPokemonPanel();
+  setStatus('宝可梦已删除', 'success');
+}
+
+// 添加技能
+function addMove(idx) {
+  if (!currentFile) return;
+  const data = saveFiles[currentFile].data;
+  if (!data.party?.[idx]) return;
+  const pkm = data.party[idx];
+  if (!pkm.moveset) pkm.moveset = [];
+  if (pkm.moveset.length >= 4) {
+    setStatus('最多只能有4个技能', 'error');
+    return;
+  }
+  // 添加一个默认技能（撞击，moveId=33），然后打开弹窗让用户选择
+  pkm.moveset.push({ moveId: 33, ppUsed: 0, ppUp: 0 });
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+  renderPokemonPanel();
+  setTimeout(() => {
+    const card = document.querySelector(`.pokemon-card[data-idx="${idx}"]`);
+    if (card) card.classList.add('expanded');
+    openMovePicker(idx, pkm.moveset.length - 1);
+  }, 0);
+}
+
+// 删除技能
+function removeMove(idx, moveIdx) {
+  if (!currentFile) return;
+  const data = saveFiles[currentFile].data;
+  if (!data.party?.[idx]?.moveset) return;
+  data.party[idx].moveset.splice(moveIdx, 1);
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+  renderPokemonPanel();
+  setTimeout(() => {
+    const card = document.querySelector(`.pokemon-card[data-idx="${idx}"]`);
+    if (card) card.classList.add('expanded');
+  }, 0);
+  setStatus('已删除技能', 'success');
+}
+
+// ============ 技能显示辅助 ============
+
+// 属性类型枚举名 -> 类型ID (用于查找中文名和颜色)
+const TYPE_ENUM_TO_ID = {
+  NORMAL: 0, FIGHTING: 1, FLYING: 2, POISON: 3, GROUND: 4,
+  ROCK: 5, BUG: 6, GHOST: 7, STEEL: 8, FIRE: 9,
+  WATER: 10, GRASS: 11, ELECTRIC: 12, PSYCHIC: 13, ICE: 14,
+  DRAGON: 15, DARK: 16, FAIRY: 17, STELLAR: 18,
+  // 改版新增属性
+  CS: 19,
+};
+
+// 属性颜色 (背景色)
+const TYPE_COLORS = {
+  0: "#A8A878",  // 一般
+  1: "#C03028",  // 格斗
+  2: "#A890F0",  // 飞行
+  3: "#A040A0",  // 毒
+  4: "#E0C068",  // 地面
+  5: "#B8A038",  // 岩石
+  6: "#A8B820",  // 虫
+  7: "#705898",  // 幽灵
+  8: "#B8B8D0",  // 钢
+  9: "#F08030",  // 火
+  10: "#6890F0", // 水
+  11: "#78C850", // 草
+  12: "#F8D030", // 电
+  13: "#F85888", // 超能力
+  14: "#98D8D8", // 冰
+  15: "#7038F8", // 龙
+  16: "#705848", // 恶
+  17: "#EE99AC", // 妖精
+  18: "#E0C068", // 星晶 (Stellar, 用金色代替)
+  19: "#B8A0E8", // 传说 (CS, 改版新增属性)
+};
+
+function getTypeBadge(typeEnumName) {
+  const typeId = TYPE_ENUM_TO_ID[typeEnumName];
+  if (typeId == null) return "";
+  const typeName = POKEMON_TYPE_NAMES[typeId] || typeEnumName;
+  const color = TYPE_COLORS[typeId] || "#666";
+  return `<span class="type-badge" style="background:${color};">${typeName}</span>`;
+}
+
+function getMoveStatsHtml(info) {
+  if (!info) return "";
+  const parts = [];
+  if (info.category && info.category !== "STATUS") {
+    const catName = info.category === "PHYSICAL" ? "物理" : (info.category === "SPECIAL" ? "特殊" : info.category);
+    parts.push(`<span><span class="stat-label">分类</span><span class="stat-value">${catName}</span></span>`);
+  }
+  if (info.power) {
+    parts.push(`<span><span class="stat-label">威力</span><span class="stat-value">${info.power}</span></span>`);
+  }
+  if (info.accuracy) {
+    parts.push(`<span><span class="stat-label">命中</span><span class="stat-value">${info.accuracy}%</span></span>`);
+  }
+  if (info.pp) {
+    parts.push(`<span><span class="stat-label">PP</span><span class="stat-value">${info.pp}</span></span>`);
+  }
+  return parts.length ? `<div class="move-stats">${parts.join("")}</div>` : "";
+}
+
+// ============ 技能选择弹窗 ============
+
+let movePickerTarget = null; // { pkmIdx, moveIdx }
+
+function openMovePicker(pkmIdx, moveIdx) {
+  if (!currentFile) return;
+  movePickerTarget = { pkmIdx, moveIdx };
+  const modal = document.getElementById('moveModal');
+  const title = document.getElementById('moveModalTitle');
+  const search = document.getElementById('moveSearch');
+
+  const data = saveFiles[currentFile].data;
+  const pkm = data.party?.[pkmIdx];
+  if (!pkm) return;
+  const pkmName = (typeof SPECIES_NAMES !== 'undefined' && SPECIES_NAMES[pkm.species]) ? SPECIES_NAMES[pkm.species] : `#${pkm.species}`;
+  const currentMove = pkm.moveset?.[moveIdx];
+  const currentMoveName = currentMove && MOVE_INFO[currentMove.moveId] ? MOVE_INFO[currentMove.moveId].name : '';
+  title.textContent = `选择技能 - ${pkmName}${currentMoveName ? ' (当前: ' + currentMoveName + ')' : ''}`;
+
+  renderMoveList('');
+  search.value = '';
+  modal.style.display = 'flex';
+  setTimeout(() => search.focus(), 50);
+}
+
+function renderMoveList(filter) {
+  const list = document.getElementById('moveList');
+  const filterLower = (filter || '').toLowerCase();
+  const entries = Object.entries(MOVE_INFO || {})
+    .filter(([id]) => parseInt(id) > 0);
+  const filtered = filterLower
+    ? entries.filter(([id, info]) => {
+        if (info.name.toLowerCase().includes(filterLower)) return true;
+        if (id.toLowerCase().includes(filterLower)) return true;
+        if (info.effect && info.effect.toLowerCase().includes(filterLower)) return true;
+        if (info.type) {
+          const typeId = TYPE_ENUM_TO_ID[info.type];
+          const typeName = typeId != null ? (POKEMON_TYPE_NAMES[typeId] || '') : '';
+          if (info.type.toLowerCase().includes(filterLower)) return true;
+          if (typeName && typeName.toLowerCase().includes(filterLower)) return true;
+        }
+        return false;
+      })
+    : entries;
+
+  let html = '';
+  if (filtered.length === 0) {
+    html = '<div style="color:#888; padding:20px; text-align:center;">无匹配技能</div>';
+  } else {
+    filtered.slice(0, 200).forEach(([id, info]) => {
+      html += `<div class="modifier-pick-item" onclick="pickMove(${id})">
+        <div style="flex:1;">
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span style="font-weight:600;">${info.name}</span>
+            <span style="color:#888; font-size:11px;">#${id}</span>
+            ${info.type ? getTypeBadge(info.type) : ''}
+          </div>
+          ${info.effect ? `<div style="font-size:11px; color:#bbb; margin-top:3px; line-height:1.4;">${info.effect}</div>` : ''}
+          ${getMoveStatsHtml(info)}
+        </div>
+      </div>`;
+    });
+    if (filtered.length > 200) {
+      html += `<div style="color:#888; padding:10px; text-align:center;">还有 ${filtered.length - 200} 个技能，请搜索过滤</div>`;
+    }
+  }
+  list.innerHTML = html;
+}
+
+function pickMove(moveId) {
+  if (!currentFile || !movePickerTarget) return;
+  const { pkmIdx, moveIdx } = movePickerTarget;
+  const data = saveFiles[currentFile].data;
+  if (!data.party?.[pkmIdx]?.moveset?.[moveIdx]) return;
+  data.party[pkmIdx].moveset[moveIdx].moveId = moveId;
+  // 重置 PP 已用
+  data.party[pkmIdx].moveset[moveIdx].ppUsed = 0;
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+
+  const name = MOVE_INFO[moveId]?.name || `#${moveId}`;
+  document.getElementById('moveModal').style.display = 'none';
+  renderPokemonPanel();
+  setTimeout(() => {
+    const cards = document.querySelectorAll('.pokemon-card');
+    cards.forEach(c => c.classList.add('expanded'));
+  }, 0);
+  setStatus(`已设置为 ${name}`, 'success');
+}
+
+function closeMoveModal() {
+  document.getElementById('moveModal').style.display = 'none';
+}
+
+function getSpeciesId(value) {
+  const id = typeof value === 'object' && value !== null ? value.speciesId : value;
+  const parsed = Number(id);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function renderSpeciesOptions(selectedSpecies) {
+  const selectedId = getSpeciesId(selectedSpecies);
+  const ids = Object.keys(SPECIES_NAMES || {})
+    .map(Number)
+    .filter(id => Number.isInteger(id) && id > 0)
+    .sort((a, b) => a - b);
+  if (selectedId > 0 && !ids.includes(selectedId)) ids.push(selectedId);
+
+  return `<option value="0" ${selectedId === 0 ? 'selected' : ''}>无融合</option>` +
+    ids.map(id => {
+      const name = SPECIES_NAMES[id] || `未知物种`;
+      return `<option value="${id}" ${selectedId === id ? 'selected' : ''}>#${id} ${name}</option>`;
+    }).join('');
+}
+
+function renderFormOptions(speciesValue, selectedForm) {
+  const speciesId = getSpeciesId(speciesValue);
+  const currentIndex = Number.isInteger(Number(selectedForm)) ? Number(selectedForm) : 0;
+  const formData = typeof SPECIES_ABILITIES !== 'undefined' ? SPECIES_ABILITIES[speciesId] : null;
+  const indexes = new Set([
+    0,
+    ...Object.keys(POKEMON_FORM_NAMES?.[speciesId] || {}).map(Number),
+    ...Object.keys(formData?.passiveForms || {}).map(Number),
+    currentIndex,
+  ].filter(Number.isInteger));
+
+  return [...indexes].sort((a, b) => a - b).map(index => {
+    const namedForm = POKEMON_FORM_NAMES?.[speciesId]?.[index]
+      || (index === 1 && POKEMON_MEGA_FORM_IDS.has(speciesId) ? '超级进化' : null);
+    const label = namedForm || (index === 0 ? '普通形态' : `其他形态 ${index}`);
+    return `<option value="${index}" ${currentIndex === index ? 'selected' : ''}>${label}</option>`;
+  }).join('');
+}
+
+function renderVariantSelect(idx, field, variant) {
+  const selected = Number.isInteger(Number(variant)) ? Number(variant) : 0;
+  return `<select data-pkm="${idx}" data-field="${field}">
+    ${Object.entries(POKEMON_VARIANT_NAMES).map(([id, name]) =>
+      `<option value="${id}" ${selected === Number(id) ? 'selected' : ''}>${name}</option>`
+    ).join('')}
+  </select>`;
+}
+
+function renderCustomAbilitySelect(idx, field, value, label) {
+  const selected = Number.isInteger(Number(value)) ? Number(value) : -1;
+  const abilities = Object.entries(ABILITY_NAMES || {})
+    .map(([id, name]) => [Number(id), name])
+    .filter(([id]) => Number.isInteger(id))
+    .sort((a, b) => a[0] - b[0]);
+  return `<div class="stat-item"><label>${label}</label><select data-pkm="${idx}" data-field="${field}">
+    <option value="-1" ${selected === -1 ? 'selected' : ''}>使用默认特性</option>
+    ${abilities.map(([id, name]) =>
+      `<option value="${id}" ${selected === id ? 'selected' : ''}>${name}</option>`
+    ).join('')}
+  </select></div>`;
+}
+
+function renderTypeSelect(idx, field, value, defaultLabel = '使用默认类型', includeStellar = false) {
+  const selected = Number.isInteger(Number(value)) ? Number(value) : 0;
+  const types = Object.entries(POKEMON_TYPE_NAMES)
+    .filter(([id]) => includeStellar || Number(id) < 18);
+  return `<select data-pkm="${idx}" data-field="${field}">
+    ${types.map(([id, name]) =>
+      `<option value="${id}" ${selected === Number(id) ? 'selected' : ''}>${Number(id) === 0 ? `${defaultLabel} (${name})` : name}</option>`
+    ).join('')}
+  </select>`;
+}
+
+function renderCustomPokemonData(idx, pkm, customData) {
+  const data = customData && typeof customData === 'object' ? customData : {};
+  const renderTypeOverrides = (typeData, fieldPrefix, labelPrefix) => {
+    const selectedTypes = Array.isArray(typeData?.types) ? typeData.types : [];
+    const MAX_T = (typeof MAX_VALID_TYPE === 'number') ? MAX_VALID_TYPE : 19;
+    const knownTypes = Object.entries(POKEMON_TYPE_NAMES)
+      .filter(([id]) => Number(id) >= 0 && Number(id) <= MAX_T);
+    return [0, 1].map(position => {
+      const selectedValue = selectedTypes[position] ?? -1;
+      const isKnown = Number(selectedValue) >= 0 && Number(selectedValue) <= MAX_T;
+      // 存档里出现了当前表未收录的合法属性值时，保留为一个可见选项，避免被静默清除
+      const extra = Number.isInteger(Number(selectedValue)) && Number(selectedValue) > MAX_T
+        ? `<option value="${selectedValue}" selected>未知属性 #${selectedValue}</option>` : '';
+      return `<div class="stat-item"><label>${labelPrefix} ${position + 1}</label><select data-pkm="${idx}" data-field="${fieldPrefix}.types.${position}">
+        <option value="-1" ${!isKnown ? 'selected' : ''}>使用默认类型</option>
+        ${extra}
+        ${knownTypes.map(([id, name]) =>
+          `<option value="${id}" ${Number(selectedValue) === Number(id) ? 'selected' : ''}>${name}</option>`
+        ).join('')}
+      </select></div>`;
+    }).join('');
+  };
+  const selectedNature = Number.isInteger(Number(data.nature)) ? Number(data.nature) : -1;
+  const currentPassive = pkm.customPokemonData?.passive;
+  const legacyFusionPassive = data.passive;
+  const selectedPassive = currentPassive != null && currentPassive !== -1
+    ? currentPassive
+    : legacyFusionPassive;
+
+  return `<div class="stat-grid">
+    ${renderCustomAbilitySelect(idx, 'fusionCustomPokemonData.ability', data.ability, '融合自定义特性')}
+    <div class="stat-item"><label>融合自定义性格</label><select data-pkm="${idx}" data-field="fusionCustomPokemonData.nature">
+      <option value="-1" ${selectedNature === -1 ? 'selected' : ''}>使用默认性格</option>
+      ${Object.entries(TRANSLATIONS.natures).map(([id, name]) =>
+        `<option value="${id}" ${selectedNature === Number(id) ? 'selected' : ''}>${name}</option>`
+      ).join('')}
+    </select></div>
+    ${renderCustomAbilitySelect(idx, 'customPokemonData.passive', selectedPassive, '被动能力覆盖')}
+    ${renderTypeOverrides(pkm.customPokemonData, 'customPokemonData', '本体基础类型覆盖')}
+    ${renderTypeOverrides(data, 'fusionCustomPokemonData', '融合基础类型覆盖')}
+    ${renderFakeSpeciesSection(idx, pkm)}
+  </div>`;
+}
+
+// 伪物种标签 (fakeSpeciesIds) - 用于触发特定物种判定而不改变实际物种
+function renderFakeSpeciesSection(idx, pkm) {
+  const fakeIds = pkm.customPokemonData?.fakeSpeciesIds || [];
+  const speciesOptions = Object.entries(SPECIES_NAMES || {})
+    .map(([id, name]) => [Number(id), name])
+    .filter(([id]) => Number.isInteger(id) && id > 0)
+    .sort((a, b) => a[0] - b[0]);
+
+  const tagsHtml = fakeIds.length === 0
+    ? '<div style="color:#888; font-size:12px;">无</div>'
+    : fakeIds.map(sid => {
+        const sname = SPECIES_NAMES[sid] || `#${sid}`;
+        return `<span class="modifier-tag" style="display:inline-flex; align-items:center; gap:6px; padding:4px 10px; background:rgba(255,215,0,0.15); border:1px solid rgba(255,215,0,0.3); border-radius:12px; font-size:12px; margin:2px;">
+          <span style="color:#ffd700;">#${sid} ${sname}</span>
+          <button onclick="event.stopPropagation(); removeFakeSpecies(${idx}, ${sid})" style="background:none; border:none; color:#ff6b6b; cursor:pointer; font-size:14px; padding:0; line-height:1;">✕</button>
+        </span>`;
+      }).join('');
+
+  return `<div style="grid-column:1/-1;">
+    <label style="display:block; margin-bottom:6px; color:#aaa; font-size:12px;">🎭 伪物种标签 (触发物种判定, 不改变种族值)</label>
+    <div style="margin-bottom:8px;">${tagsHtml}</div>
+    <div style="display:flex; gap:6px;">
+      <select id="fakeSpeciesSelect_${idx}" style="flex:1; padding:6px 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:#e0e0e0; font-size:12px;">
+        <option value="0">选择物种...</option>
+        ${speciesOptions.map(([id, name]) =>
+          `<option value="${id}">#${id} ${name}</option>`
+        ).join('')}
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); addFakeSpecies(${idx})" style="padding:6px 12px; font-size:12px;">添加</button>
+    </div>
+    <div style="font-size:11px; color:#666; margin-top:4px;">提示: 伪物种可让「以某物种为前提」的效果生效。注: 晶光星群(TypeStarstorm)已由本体补丁解除「必须太乐巴戈斯 / 必须星晶太晶化」限制，无需再添加 TERAPAGOS(1024)。</div>
+  </div>`;
+}
+
+function addFakeSpecies(idx) {
+  if (!currentFile) return;
+  const pkm = saveFiles[currentFile].data.party?.[idx];
+  if (!pkm) return;
+  const select = document.getElementById(`fakeSpeciesSelect_${idx}`);
+  const sid = Number(select?.value);
+  if (!sid || sid <= 0) return;
+  if (!pkm.customPokemonData) pkm.customPokemonData = {};
+  if (!pkm.customPokemonData.fakeSpeciesIds) pkm.customPokemonData.fakeSpeciesIds = [];
+  if (!pkm.customPokemonData.fakeSpeciesIds.includes(sid)) {
+    pkm.customPokemonData.fakeSpeciesIds.push(sid);
+  }
+  saveFiles[currentFile].dirty = true;
+  renderPokemonPanel();
+  const name = SPECIES_NAMES[sid] || `#${sid}`;
+  setStatus(`已添加伪物种标签: #${sid} ${name}`, 'success');
+}
+
+function removeFakeSpecies(idx, sid) {
+  if (!currentFile) return;
+  const pkm = saveFiles[currentFile].data.party?.[idx];
+  if (!pkm?.customPokemonData?.fakeSpeciesIds) return;
+  pkm.customPokemonData.fakeSpeciesIds = pkm.customPokemonData.fakeSpeciesIds.filter(id => id !== sid);
+  saveFiles[currentFile].dirty = true;
+  renderPokemonPanel();
+  const name = SPECIES_NAMES[sid] || `#${sid}`;
+  setStatus(`已移除伪物种标签: #${sid} ${name}`, 'success');
+}
+
+function migrateFusionPassiveOverrides(party) {
+  for (const pkm of party) {
+    const fusionPassive = pkm.fusionCustomPokemonData?.passive;
+    if (
+      getSpeciesId(pkm.fusionSpecies) > 0
+      && fusionPassive != null
+      && fusionPassive !== -1
+      && (pkm.customPokemonData?.passive == null || pkm.customPokemonData.passive === -1)
+    ) {
+      if (!pkm.customPokemonData || typeof pkm.customPokemonData !== 'object') {
+        pkm.customPokemonData = {};
+      }
+      pkm.customPokemonData.passive = fusionPassive;
+      pkm.fusionCustomPokemonData.passive = -1;
+    }
+  }
+}
+
+function getShinyLuck(shiny, variant) {
+  if (!shiny) return 0;
+  const parsedVariant = Number(variant);
+  return Number.isInteger(parsedVariant) && parsedVariant >= 0 && parsedVariant <= 2
+    ? parsedVariant + 1
+    : 1;
+}
+
+function syncPokemonLuck(pkm) {
+  pkm.luck = getShinyLuck(pkm.shiny, pkm.variant);
+  pkm.fusionLuck = getSpeciesId(pkm.fusionSpecies) > 0
+    ? getShinyLuck(pkm.fusionShiny, pkm.fusionVariant)
+    : 0;
+}
+
+function getPokemonLuckSummary(pkm) {
+  const primaryLuck = getShinyLuck(pkm.shiny, pkm.variant);
+  const fusionLuck = getSpeciesId(pkm.fusionSpecies) > 0
+    ? getShinyLuck(pkm.fusionShiny, pkm.fusionVariant)
+    : 0;
+  return `本体幸运 ${primaryLuck} + 融合幸运 ${fusionLuck} = 总幸运 ${primaryLuck + fusionLuck}`;
+}
+
+function updatePokemonLuckSummaries(party) {
+  party.forEach((pkm, idx) => {
+    const summary = document.getElementById(`luck-summary-${idx}`);
+    if (summary) summary.textContent = getPokemonLuckSummary(pkm);
+  });
+}
+
+// abilityIndex/fusionAbilityIndex are slot indexes (0/1/2), not AbilityIds.
+function renderAbilitySelect(idx, pkm, field = 'abilityIndex', speciesValue = pkm.species, label = '特性') {
+  const speciesId = getSpeciesId(speciesValue);
+  const sa = (typeof SPECIES_ABILITIES !== 'undefined') ? SPECIES_ABILITIES[speciesId] : null;
+  if (!sa) {
+    return `<select aria-label="${label}" data-pkm="${idx}" data-field="${field}">
+      <option value="0" ${Number(pkm[field] ?? 0) === 0 ? 'selected' : ''}>第一特性（索引 0）</option>
+      <option value="1" ${Number(pkm[field] ?? 0) === 1 ? 'selected' : ''}>第二特性（索引 1）</option>
+      <option value="2" ${Number(pkm[field] ?? 0) === 2 ? 'selected' : ''}>隐藏特性（索引 2）</option>
+    </select>`;
+  }
+  const abilityIds = [sa.ability1, sa.ability2, sa.abilityHidden];
+  const labels = ['第一特性', '第二特性', '隐藏特性'];
+  const options = abilityIds.map((aid, i) => {
+    if (i === 1 && aid === 0) return ''; // 没有第二特性则不显示
+    const name = (typeof ABILITY_NAMES !== 'undefined' && ABILITY_NAMES[aid]) ? ABILITY_NAMES[aid] : `AbilityId ${aid}`;
+    return `<option value="${i}" ${Number(pkm[field] ?? 0) === i ? 'selected' : ''}>${labels[i]}: ${name}</option>`;
+  }).filter(Boolean).join('');
+  return `<select aria-label="${label}" data-pkm="${idx}" data-field="${field}" onchange="event.stopPropagation();">${options}</select>`;
+}
+
+// 显示被动特性提示
+function getPassiveHint(idx, pkm) {
+  const speciesId = pkm.species;
+  const sa = (typeof SPECIES_ABILITIES !== 'undefined') ? SPECIES_ABILITIES[speciesId] : null;
+  if (!sa) return '无 species 数据, 被动特性未知';
+  const formIndex = pkm.formIndex ?? 0;
+  let passiveId = sa.passiveDefault;
+  if (sa.passiveForms && sa.passiveForms[String(formIndex)] !== undefined) {
+    passiveId = sa.passiveForms[String(formIndex)];
+  }
+  const name = (typeof ABILITY_NAMES !== 'undefined' && ABILITY_NAMES[passiveId]) ? ABILITY_NAMES[passiveId] : `AbilityId ${passiveId}`;
+  return `💡 该宝可梦的被动特性 (form ${formIndex}): ${name}`;
+}
+
+// 判断 modifier 是否为携带物 (PokemonHeldItemModifier 子类)
+// 携带物的 args[0] 是 pokemonId, 对应队伍中某只宝可梦的 id
+function isHeldItemModifier(mod) {
+  if (!mod) return false;
+  if (!mod.args || mod.args.length === 0) return false;
+  const pokemonId = mod.args[0];
+  if (typeof pokemonId !== 'number') return false;
+  // 检查是否匹配 party 中某只宝可梦的 id
+  if (!currentFile || !saveFiles[currentFile].data?.party) return false;
+  return saveFiles[currentFile].data.party.some(p => p.id === pokemonId);
+}
+
+// 渲染宝可梦的携带物 (在宝可梦卡片内)
+function renderHeldItems(idx, pkm) {
+  if (!currentFile) return '';
+  const data = saveFiles[currentFile].data;
+  if (!data.modifiers) return '<div style="color:#888; font-size:12px;">无 modifiers 数据</div>';
+  const pokemonId = pkm.id;
+  // 找出属于这只宝可梦的携带物
+  const heldItems = data.modifiers
+    .map((m, i) => ({ mod: m, idx: i }))
+    .filter(({ mod }) => isHeldItemModifier(mod) && mod.args && mod.args[0] === pokemonId);
+  if (heldItems.length === 0) {
+    return `<div class="moves-list">
+      <div style="color:#888; font-size:12px; margin-bottom:6px;">未持有道具</div>
+      <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openModifierPicker(false, ${idx})" style="width:100%;">➕ 添加携带物</button>
+    </div>`;
+  }
+  return `<div class="moves-list">
+    ${heldItems.map(({ mod, idx: modIdx }) => {
+      const name = (typeof MODIFIER_NAMES !== 'undefined' && MODIFIER_NAMES[mod.typeId]) ? MODIFIER_NAMES[mod.typeId] : mod.typeId;
+      const desc = (typeof MODIFIER_DESCRIPTIONS !== 'undefined' && MODIFIER_DESCRIPTIONS[mod.typeId]) || '';
+      return `<div class="move-item" style="flex-wrap:wrap;">
+        <div style="flex:1; min-width:120px;">
+          <span style="color:#e0e0e0;">${name}</span>
+          ${desc ? `<div style="font-size:11px; color:#bbb; margin-top:2px; line-height:1.4; width:100%;">${desc}</div>` : ''}
+        </div>
+        <label style="font-size:12px;">数量: <input type="number" min="1" max="99" value="${mod.stackCount || 1}" data-mod-idx="${modIdx}" data-mod-field="stackCount" style="width:50px;"></label>
+        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); removeModifier(${modIdx})" style="padding:4px 8px; font-size:12px;">✕</button>
+      </div>`;
+    }).join('')}
+    <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openModifierPicker(false, ${idx})" style="width:100%; margin-top:8px;">➕ 添加携带物</button>
+  </div>`;
+}
+
+// ============ 对局道具面板 ============
+
+function renderItemsPanel() {
+  if (!currentFile) {
+    document.getElementById('itemsContent').innerHTML = '<p style="color:#888;">请先选择存档文件</p>';
+    return;
+  }
+  const data = saveFiles[currentFile].data;
+  const modifiers = data.modifiers || [];
+  const enemyModifiers = data.enemyModifiers || [];
+  // 对局道具面板只显示非携带物, 携带物在宝可梦卡片中编辑
+  const playerItems = modifiers.map((m, i) => ({ mod: m, idx: i })).filter(({ mod }) => !isHeldItemModifier(mod));
+  const enemyItems = enemyModifiers.map((m, i) => ({ mod: m, idx: i })).filter(({ mod }) => !isHeldItemModifier(mod));
+  let html = `<div style="margin-bottom:20px;">
+    <h3 style="color:#ffd700; margin-bottom:10px;">🎒 玩家道具 (${playerItems.length})</h3>
+    <button class="btn btn-primary btn-sm" onclick="addModifier(false)" style="margin-bottom:10px;">➕ 添加玩家道具</button>
+    <div class="file-tabs" style="flex-direction:column;">`;
+  if (playerItems.length === 0) {
+    html += '<p style="color:#888; padding:10px;">无道具</p>';
+  } else {
+    playerItems.forEach(({ mod, idx }) => {
+      const name = (typeof MODIFIER_NAMES !== 'undefined' && MODIFIER_NAMES[mod.typeId]) ? MODIFIER_NAMES[mod.typeId] : mod.typeId;
+      const desc = (typeof MODIFIER_DESCRIPTIONS !== 'undefined' && MODIFIER_DESCRIPTIONS[mod.typeId]) || '';
+      html += `<div class="move-item" style="margin-bottom:8px; padding:10px; background:rgba(255,255,255,0.05); border-radius:6px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:150px;">
+          <strong style="color:#4a9eff;">[${idx}] ${name}</strong>
+          <div style="font-size:11px; color:#888;">类型: ${mod.typeId} | 类: ${mod.className || '?'}</div>
+          ${desc ? `<div style="font-size:11px; color:#bbb; margin-top:3px; line-height:1.4;">${desc}</div>` : ''}
+        </div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <label style="font-size:12px;">数量: <input type="number" min="1" max="999" value="${mod.stackCount || 1}" data-mod-idx="${idx}" data-mod-field="stackCount" data-mod-side="player" style="width:60px;"></label>
+          <button class="btn btn-danger btn-sm" onclick="removeModifier(${idx}, false)" style="padding:4px 8px; font-size:12px;">✕</button>
+        </div>
+      </div>`;
+    });
+  }
+  html += '</div></div>';
+
+  html += `<div style="margin-bottom:20px;">
+    <h3 style="color:#ff6b6b; margin-bottom:10px;">👹 敌方道具 (${enemyItems.length})</h3>
+    <button class="btn btn-primary btn-sm" onclick="addModifier(true)" style="margin-bottom:10px;">➕ 添加敌方道具</button>
+    <div class="file-tabs" style="flex-direction:column;">`;
+  if (enemyItems.length === 0) {
+    html += '<p style="color:#888; padding:10px;">无道具</p>';
+  } else {
+    enemyItems.forEach(({ mod, idx }) => {
+      const name = (typeof MODIFIER_NAMES !== 'undefined' && MODIFIER_NAMES[mod.typeId]) ? MODIFIER_NAMES[mod.typeId] : mod.typeId;
+      const desc = (typeof MODIFIER_DESCRIPTIONS !== 'undefined' && MODIFIER_DESCRIPTIONS[mod.typeId]) || '';
+      html += `<div class="move-item" style="margin-bottom:8px; padding:10px; background:rgba(255,255,255,0.05); border-radius:6px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:150px;">
+          <strong style="color:#ff6b6b;">[${idx}] ${name}</strong>
+          <div style="font-size:11px; color:#888;">类型: ${mod.typeId} | 类: ${mod.className || '?'}</div>
+          ${desc ? `<div style="font-size:11px; color:#bbb; margin-top:3px; line-height:1.4;">${desc}</div>` : ''}
+        </div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <label style="font-size:12px;">数量: <input type="number" min="1" max="999" value="${mod.stackCount || 1}" data-mod-idx="${idx}" data-mod-field="stackCount" data-mod-side="enemy" style="width:60px;"></label>
+          <button class="btn btn-danger btn-sm" onclick="removeModifier(${idx}, true)" style="padding:4px 8px; font-size:12px;">✕</button>
+        </div>
+      </div>`;
+    });
+  }
+  html += '</div></div>';
+
+  document.getElementById('itemsContent').innerHTML = html;
+
+  // 监听 stackCount 变化
+  document.querySelectorAll('#itemsContent input[data-mod-field="stackCount"]').forEach(input => {
+    input.addEventListener('change', (e) => {
+      e.stopPropagation();
+      const idx = parseInt(input.dataset.modIdx);
+      const side = input.dataset.modSide;
+      const target = side === 'enemy' ? data.enemyModifiers : data.modifiers;
+      if (target && target[idx]) {
+        target[idx].stackCount = parseInt(input.value) || 1;
+        saveFiles[currentFile].dirty = true;
+        renderFileTabs();
+      }
+    });
+  });
+}
+
+// 根据 pokemonId 获取宝可梦名 (用于显示携带物归属)
+function getPokemonNameById(pokemonId) {
+  if (!currentFile) return `#${pokemonId}`;
+  const data = saveFiles[currentFile].data;
+  if (!data.party) return `#${pokemonId}`;
+  const pkm = data.party.find(p => p.id === pokemonId);
+  if (!pkm) return `#${pokemonId}`;
+  const speciesName = (typeof SPECIES_NAMES !== 'undefined' && SPECIES_NAMES[pkm.species]) ? SPECIES_NAMES[pkm.species] : `species ${pkm.species}`;
+  return speciesName + (pkm.nickname ? ` (${pkm.nickname})` : '');
+}
+
+// 添加 modifier
+function addModifier(isEnemy) {
+  if (!currentFile) return;
+  openModifierPicker(isEnemy, null);
+}
+
+// 删除 modifier
+function removeModifier(idx, isEnemy) {
+  if (!currentFile) return;
+  const data = saveFiles[currentFile].data;
+  const list = isEnemy ? data.enemyModifiers : data.modifiers;
+  if (!list || !list[idx]) return;
+  const name = (typeof MODIFIER_NAMES !== 'undefined' && MODIFIER_NAMES[list[idx].typeId]) ? MODIFIER_NAMES[list[idx].typeId] : list[idx].typeId;
+  list.splice(idx, 1);
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+  // 重新渲染当前面板
+  if (currentMode === 'items') {
+    renderItemsPanel();
+  } else {
+    renderPokemonPanel();
+    // 保持当前宝可梦卡片展开
+    setTimeout(() => {
+      const cards = document.querySelectorAll('.pokemon-card');
+      cards.forEach(c => c.classList.add('expanded'));
+    }, 0);
+  }
+  setStatus(`已删除 ${name}`, 'success');
+}
+
+// ============ JSON 编辑器函数 ============
+
+document.getElementById('formatJsonBtn').addEventListener('click', () => {
+  try {
+    const parsed = JSON.parse(jsonEditor.value);
+    jsonEditor.value = JSON.stringify(parsed, null, 2);
+    showJsonStatus('JSON 已格式化', true);
+  } catch (e) {
+    showJsonStatus('JSON 格式错误: ' + e.message, false);
+  }
+});
+
+document.getElementById('compressJsonBtn').addEventListener('click', () => {
+  try {
+    const parsed = JSON.parse(jsonEditor.value);
+    jsonEditor.value = JSON.stringify(parsed);
+    showJsonStatus('JSON 已压缩', true);
+  } catch (e) {
+    showJsonStatus('JSON 格式错误: ' + e.message, false);
+  }
+});
+
+document.getElementById('validateJsonBtn').addEventListener('click', () => {
+  try {
+    JSON.parse(jsonEditor.value);
+    showJsonStatus('✅ JSON 格式有效', true);
+  } catch (e) {
+    showJsonStatus('❌ JSON 格式错误: ' + e.message, false);
+  }
+});
+
+jsonEditor.addEventListener('input', () => {
+  try {
+    JSON.parse(jsonEditor.value);
+    jsonStatus.style.display = 'none';
+    applyJsonEditor();
+  } catch (e) {
+    // 不立即显示错误，避免干扰
+  }
+});
+
+function showJsonStatus(msg, valid) {
+  jsonStatus.className = 'json-status ' + (valid ? 'valid' : 'invalid');
+  jsonStatus.textContent = msg;
+  jsonStatus.style.display = 'block';
+}
+
+// ============ 存档验证 ============
+
+function validateSaveData(data, filename) {
+  const errors = [];
+  const warnings = [];
+  
+  if (!data || typeof data !== 'object') {
+    errors.push('数据不是有效对象');
+    return { valid: false, errors, warnings };
+  }
+
+  // 判断存档类型
+  const isSystem = data.dexData !== undefined && data.trainerId !== undefined;
+  const isSession = data.party !== undefined && data.enemyParty !== undefined;
+  const isRunHistory = !isSystem && !isSession && Object.keys(data).some(k => 
+    data[k] && typeof data[k] === 'object' && 
+    data[k].isVictory !== undefined && data[k].entry !== undefined
+  );
+
+  if (isSystem) {
+    // 系统存档验证
+    if (!data.dexData) errors.push('缺少 dexData');
+    if (!data.timestamp) errors.push('缺少 timestamp');
+    if (!data.starterData) warnings.push('缺少 starterData');
+    if (!data.gameStats) warnings.push('缺少 gameStats');
+  } else if (isSession) {
+    // 会话存档验证
+    if (!Array.isArray(data.party)) errors.push('party 不是数组');
+    else if (data.party.length === 0) warnings.push('party 为空');
+    else {
+      data.party.forEach((p, i) => {
+        if (!p || typeof p !== 'object') { errors.push(`party[${i}] 不是有效对象`); return; }
+        if (!p.species || typeof p.species !== 'number') errors.push(`party[${i}] 缺少有效 species`);
+        if (p.level === undefined || typeof p.level !== 'number') errors.push(`party[${i}] 缺少有效 level`);
+        if (!Array.isArray(p.ivs) || p.ivs.length !== 6) errors.push(`party[${i}] ivs 不是6个元素`);
+        if (!Array.isArray(p.stats) || p.stats.length !== 6) warnings.push(`party[${i}] stats 不是6个元素`);
+        if (!Array.isArray(p.moveset)) warnings.push(`party[${i}] 缺少 moveset`);
+        if (!p.summonData || typeof p.summonData !== 'object') warnings.push(`party[${i}] 缺少 summonData`);
+        // battleData 为可选字段：官方与改版均以 summonData 承载战斗态，改版还用 customPokemonData；
+        // 三者都不存在才提示，避免对正常改版存档误报。
+        if ((!p.battleData || typeof p.battleData !== 'object')
+          && (!p.summonData || typeof p.summonData !== 'object')
+          && (!p.customPokemonData || typeof p.customPokemonData !== 'object')) {
+          warnings.push(`party[${i}] 缺少战斗态数据 (battleData/summonData)`);
+        }
+        // 物种ID有效性检查
+        if (typeof SPECIES_NAMES !== 'undefined' && SPECIES_NAMES[p.species] === undefined) {
+          warnings.push(`party[${i}] 物种ID #${p.species} 可能无效`);
+        }
+        // 性格范围检查
+        if (p.nature !== undefined && (p.nature < 0 || p.nature > 24)) {
+          errors.push(`party[${i}] 性格值 ${p.nature} 超出范围 (0-24)`);
+        }
+      });
+    }
+    
+    if (!Array.isArray(data.enemyParty)) errors.push('enemyParty 不是数组');
+    if (!data.timestamp) errors.push('缺少 timestamp');
+    if (!data.arena || typeof data.arena !== 'object') errors.push('缺少 arena');
+    if (!Array.isArray(data.modifiers)) errors.push('modifiers 不是数组');
+    // Older and non-challenge session saves may store this optional field as null.
+    if (data.challenges != null && !Array.isArray(data.challenges)) errors.push('challenges 不是数组');
+    if (data.money === undefined || typeof data.money !== 'number') warnings.push('缺少 money');
+  } else if (isRunHistory) {
+    // 运行历史验证
+    const keys = Object.keys(data);
+    if (keys.length === 0) warnings.push('运行历史为空');
+    for (const key of keys.slice(0, 5)) {
+      const entry = data[key];
+      const entryKeys = Object.keys(entry);
+      const hasAll = ['isFavorite', 'isVictory', 'entry'].every(v => entryKeys.includes(v));
+      if (!hasAll || entryKeys.length !== 3) {
+        errors.push(`条目 ${key} 字段不完整`);
+        break;
+      }
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+    type: isSystem ? '系统存档' : isSession ? '会话存档' : isRunHistory ? '运行历史' : '未知类型'
+  };
+}
+
+// ============ 保存/导出 ============
+
+saveBtn.addEventListener('click', () => {
+  if (!currentFile) return;
+
+  // 先应用当前模式的更改
+  if (currentMode === 'fine') {
+    if (!applyJsonEditor()) {
+      alert('JSON 格式错误，无法保存！');
+      return;
+    }
+  } else if (currentMode === 'batch') {
+    applyBatchChanges();
+  } else if (currentMode === 'dex') {
+    applyDexChanges();
+  } else if (currentMode === 'pokemon') {
+    applyPokemonChanges();
+  }
+
+  // 保存前验证所有脏文件
+  const allResults = [];
+  for (const [filename, file] of Object.entries(saveFiles)) {
+    if (file.dirty) {
+      // 先修复 modifier 数据
+      const repaired = repairModifiers(file.data);
+      if (repaired > 0) {
+        console.log(`[${filename}] 修复了 ${repaired} 个 modifier 数据`);
+      }
+      const result = validateSaveData(file.data, filename);
+      allResults.push({ filename, ...result });
+      if (!result.valid) {
+        alert(`存档 ${filename} 验证失败：\n${result.errors.slice(0, 5).map(e => '• ' + e).join('\n')}\n\n保存已取消，请检查数据。`);
+        return;
+      }
+    }
+  }
+
+  // 如果有警告，询问用户是否继续
+  const warnings = allResults.filter(r => r.warnings.length > 0);
+  if (warnings.length > 0) {
+    const warnMsg = warnings.map(w => 
+      `${w.filename} (${w.type}):\n${w.warnings.slice(0, 3).map(e => '  ⚠ ' + e).join('\n')}`
+    ).join('\n\n');
+    if (!confirm(`以下警告可能影响存档兼容性：\n\n${warnMsg}\n\n仍然继续保存吗？`)) {
+      return;
+    }
+  }
+
+  // 保存所有脏文件
+  for (const [filename, file] of Object.entries(saveFiles)) {
+    if (file.dirty) {
+      try {
+        const encrypted = encryptSaveData(file.data);
+        downloadFile(encrypted, filename, 'text/plain');
+        file.dirty = false;
+      } catch (e) {
+        alert(`保存 ${filename} 失败: ${e.message}`);
+        return;
+      }
+    }
+  }
+  renderFileTabs();
+  setStatus('所有修改已保存!', 'success');
+});
+
+exportBtn.addEventListener('click', () => {
+  if (!currentFile) return;
+  if (currentMode === 'fine') applyJsonEditor();
+  if (currentMode === 'dex') applyDexChanges();
+  if (currentMode === 'pokemon') applyPokemonChanges();
+  if (currentMode === 'batch') applyBatchChanges();
+  const data = saveFiles[currentFile].data;
+  const jsonStr = JSON.stringify(data, null, 2);
+  const filename = currentFile.replace('.prsv', '.json');
+  downloadFile(jsonStr, filename, 'application/json');
+  setStatus('JSON 已导出', 'success');
+});
+
+reloadBtn.addEventListener('click', () => {
+  if (!confirm('重新加载将丢失所有未保存的修改，确定吗？')) return;
+  // 重新加载当前文件
+  if (currentFile && saveFiles[currentFile]) {
+    const file = saveFiles[currentFile];
+    try {
+      const data = decryptSaveData(file.raw);
+      file.data = data;
+      file.originalData = JSON.parse(JSON.stringify(data));
+      file.dirty = false;
+      renderFileTabs();
+      renderCurrentFile();
+      setStatus('文件已重新加载', 'success');
+    } catch (e) {
+      setStatus('重新加载失败: ' + e.message, 'error');
+    }
+  }
+});
+
+// 帮助按钮
+document.getElementById('helpBtn').addEventListener('click', () => {
+  document.getElementById('helpModal').style.display = 'flex';
+});
+
+// 点击弹窗外部关闭
+document.getElementById('helpModal').addEventListener('click', (e) => {
+  if (e.target.id === 'helpModal') {
+    document.getElementById('helpModal').style.display = 'none';
+  }
+});
+
+function downloadFile(content, filename, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// 状态提示
+function setStatus(msg, type) {
+  statusLeft.textContent = msg;
+  statusLeft.style.color = type === 'success' ? '#2ecc71' : type === 'error' ? '#e74c3c' : '#aaa';
+  setTimeout(() => {
+    statusLeft.style.color = '#aaa';
+  }, 3000);
+}
+
+// ============ 道具添加弹窗 ============
+
+let modifierPickerTarget = null; // { isEnemy: bool, pokemonIdx: number|null }
+
+function openModifierPicker(isEnemy, pokemonIdx) {
+  modifierPickerTarget = { isEnemy, pokemonIdx };
+  const modal = document.getElementById('modifierModal');
+  const title = document.getElementById('modifierModalTitle');
+  const list = document.getElementById('modifierList');
+  const search = document.getElementById('modifierSearch');
+
+  if (pokemonIdx !== null && pokemonIdx !== undefined) {
+    const pkm = saveFiles[currentFile].data.party[pokemonIdx];
+    title.textContent = `给 ${getPokemonNameById(pkm.id)} 添加携带物`;
+  } else {
+    title.textContent = isEnemy ? '添加敌方道具' : '添加玩家道具';
+  }
+
+  renderModifierList('');
+  search.value = '';
+  modal.style.display = 'flex';
+  setTimeout(() => search.focus(), 50);
+}
+
+function renderModifierList(filter) {
+  const list = document.getElementById('modifierList');
+  const filterLower = (filter || '').toLowerCase();
+  // 根据调用场景过滤: 携带物场景只显示携带物, 对局道具场景只显示非携带物
+  const isHeldScene = modifierPickerTarget && modifierPickerTarget.pokemonIdx !== null && modifierPickerTarget.pokemonIdx !== undefined;
+
+  // 收集所有可显示的条目
+  const items = [];
+  const baseEntries = Object.entries(MODIFIER_NAMES || {});
+
+  // 1. 普通道具 (非生成器)
+  for (const [id, name] of baseEntries) {
+    const cls = (typeof MODIFIER_CLASSES !== 'undefined' && MODIFIER_CLASSES[id]) || {};
+    const isHeld = cls.isHeld || false;
+    const isGenerator = cls.isGenerator || false;
+    if (isGenerator) continue; // 生成器跳过, 后面处理
+    if (isHeldScene && !isHeld) continue;
+    if (!isHeldScene && isHeld) continue;
+    const desc = (typeof MODIFIER_DESCRIPTIONS !== 'undefined' && MODIFIER_DESCRIPTIONS[id]) || '';
+    items.push({ id, name, desc, tag: isHeld ? '🎒携带' : '全局', tagColor: isHeld ? '#4a9eff' : '#2ecc71', isExpanded: false, isHeld, disabled: false });
+  }
+
+  // 2. 展开后的生成器类型具体选项
+  if (typeof MODIFIER_EXPANDED !== 'undefined') {
+    for (const exp of MODIFIER_EXPANDED) {
+      if (isHeldScene && !exp.isHeld) continue;
+      if (!isHeldScene && exp.isHeld) continue;
+      items.push({
+        id: exp.baseTypeId,
+        name: exp.name,
+        desc: exp.description,
+        tag: exp.isHeld ? '🎒携带' : '全局',
+        tagColor: exp.isHeld ? '#4a9eff' : '#2ecc71',
+        isExpanded: true,
+        typePregenArgs: exp.typePregenArgs,
+        className: exp.className,
+        isHeld: exp.isHeld,
+        disabled: false,
+      });
+    }
+  }
+
+  // 3. 未展开的生成器类型 (灰色, 带说明)
+  const expandedBaseTypes = new Set((typeof MODIFIER_EXPANDED !== 'undefined' ? MODIFIER_EXPANDED : []).map(e => e.baseTypeId));
+  for (const [id, name] of baseEntries) {
+    const cls = (typeof MODIFIER_CLASSES !== 'undefined' && MODIFIER_CLASSES[id]) || {};
+    const isHeld = cls.isHeld || false;
+    const isGenerator = cls.isGenerator || false;
+    if (!isGenerator) continue; // 只处理生成器
+    if (expandedBaseTypes.has(id)) continue;
+    if (isHeldScene && !isHeld) continue;
+    if (!isHeldScene && isHeld) continue;
+    const desc = (typeof MODIFIER_DESCRIPTIONS !== 'undefined' && MODIFIER_DESCRIPTIONS[id]) || '';
+    items.push({
+      id,
+      name,
+      desc: desc + ' ⚠生成器类型：在游戏中随机获得具体种类，无法直接添加。',
+      tag: '生成器',
+      tagColor: '#888',
+      isExpanded: false,
+      isHeld,
+      disabled: true,
+    });
+  }
+
+  // 过滤
+  const filtered = filterLower
+    ? items.filter(it => it.name.toLowerCase().includes(filterLower) || it.id.toLowerCase().includes(filterLower) || it.desc.toLowerCase().includes(filterLower))
+    : items;
+
+  let html = '';
+  if (filtered.length === 0) {
+    html = `<div style="color:#888; padding:20px; text-align:center;">无匹配${isHeldScene ? '携带物' : '道具'}</div>`;
+  } else {
+    filtered.forEach(it => {
+      const disabledStyle = it.disabled ? 'opacity:0.5; cursor:not-allowed;' : '';
+      const clickHandler = it.disabled ? '' : (it.isExpanded
+        ? `pickExpandedModifier('${it.id}', ${JSON.stringify(it.typePregenArgs)}, '${it.className}', ${it.isHeld})`
+        : `pickModifier('${it.id}')`);
+      html += `<div class="modifier-pick-item" onclick="${clickHandler}" style="${disabledStyle}">
+        <div style="flex:1;">
+          <div style="font-weight:600;">${it.name} <span style="color:#888; font-size:11px;">${it.id}</span> <span style="color:${it.tagColor}; font-size:10px;">${it.tag}</span></div>
+          ${it.desc ? `<div style="font-size:11px; color:#bbb; margin-top:3px; line-height:1.4;">${it.desc}</div>` : ''}
+        </div>
+      </div>`;
+    });
+  }
+  list.innerHTML = html;
+}
+
+// =================================================
+// Modifier 实例生成器 - 生成正确 args 结构的 modifier
+// =================================================
+function createRealModifier(baseTypeId, typePregenArgs, pokemonIdx, isEnemy) {
+  const data = saveFiles[currentFile].data;
+  const cls = (typeof MODIFIER_CLASSES !== 'undefined' && MODIFIER_CLASSES[baseTypeId]) || {};
+  const className = cls.className || 'PersistentModifier';
+  const isHeld = cls.isHeld || false;
+
+  // 获取宝可梦 ID
+  let pokemonId = 0;
+  const targetIdx = (pokemonIdx !== null && pokemonIdx !== undefined) ? pokemonIdx : 0;
+  if (data.party && data.party[targetIdx]) {
+    pokemonId = data.party[targetIdx].id ?? targetIdx;
+  }
+
+  const args = [];
+
+  // 需要宝可梦 ID 的类型: 携带物 + 消耗品类型作用于宝可梦的
+  const needsPokemonId = isHeld
+    || baseTypeId === 'TERA_SHARD'
+    || baseTypeId === 'MINT'
+    || baseTypeId === 'HP_UPGRADE'
+    || baseTypeId === 'RARE_CANDY_JAR'
+    || baseTypeId === 'REVIVE';
+
+  if (needsPokemonId) {
+    args.push(pokemonId);
+  }
+
+  // 各类型的额外参数
+  switch (baseTypeId) {
+    // ===== 基础属性提升 (携带物) =====
+    // BaseStatModifier: constructor(type, pokemonId, stat, stackCount?)
+    // getArgs: [pokemonId, stat]
+    case 'BASE_STAT_BOOSTER':
+      args.push(typePregenArgs?.[0] ?? 0); // stat
+      break;
+
+    // ===== 招式类型威力提升 (携带物) =====
+    // AttackTypeBoosterModifier: constructor(type, pokemonId, moveType, boostPercent, stackCount?)
+    // getArgs: [pokemonId, moveType, boostPercent]
+    case 'ATTACK_TYPE_BOOSTER':
+      args.push(typePregenArgs?.[0] ?? 0); // moveType
+      args.push(20); // boostPercent (20%)
+      break;
+
+    // ===== 太晶碎块 (消耗品) =====
+    // TerastallizeModifier: constructor(type, pokemonId, teraType)
+    // args: [pokemonId, teraType]
+    case 'TERA_SHARD':
+      args.push(typePregenArgs?.[0] ?? 0); // teraType
+      break;
+
+    // ===== 薄荷 (消耗品) =====
+    // PokemonNatureChangeModifier: constructor(type, pokemonId, nature)
+    // args: [pokemonId, nature]
+    case 'MINT':
+      args.push(typePregenArgs?.[0] ?? 0); // nature
+      break;
+
+    // ===== 心之水滴 (普通携带物, 只有 pokemonId) =====
+    // PokemonNatureWeightModifier: constructor(type, pokemonId, stackCount?)
+    // getArgs: [pokemonId]
+    case 'SOUL_DEW':
+      // 已经在上面 push 了 pokemonId (因为 isHeld=true)
+      break;
+
+    // ===== 紧缠钩爪: 携带宝可梦 ID + 固定触发概率 =====
+    case 'GRIP_CLAW':
+      args.push(10);
+      break;
+
+    // ===== 其他携带物: 只有 [pokemonId] =====
+    default:
+      // 普通携带物已经在上面 push 了 pokemonId
+      // 全局道具 args 保持为空
+      break;
+  }
+
+  return {
+    player: !isEnemy,
+    typeId: baseTypeId,
+    typePregenArgs: ['BERRY_POUCH', 'TERA_ORB', 'SHINY_CHARM', 'CATCHING_CHARM', 'LOCK_CAPSULE'].includes(baseTypeId)
+      ? undefined
+      : (typePregenArgs || []),
+    args: ['BERRY_POUCH', 'TERA_ORB', 'SHINY_CHARM', 'CATCHING_CHARM', 'LOCK_CAPSULE'].includes(baseTypeId)
+      ? null
+      : args,
+    stackCount: 1,
+    className: className,
+  };
+}
+
+// =================================================
+// 修复已有存档中损坏的 modifier 数据
+// =================================================
+function repairModifiers(data) {
+  if (!data.modifiers && !data.enemyModifiers) return 0;
+
+  let repaired = 0;
+
+  function repairList(list) {
+    if (!Array.isArray(list)) return;
+    for (const mod of list) {
+      const cls = (typeof MODIFIER_CLASSES !== 'undefined' && MODIFIER_CLASSES[mod.typeId]) || {};
+      const isHeld = cls.isHeld || false;
+
+      if (['BERRY_POUCH', 'TERA_ORB', 'SHINY_CHARM', 'CATCHING_CHARM', 'LOCK_CAPSULE'].includes(mod.typeId)) {
+        if (mod.className !== cls.className || mod.args !== null || mod.typePregenArgs !== undefined) {
+          mod.className = cls.className;
+          mod.args = null;
+          delete mod.typePregenArgs;
+          repaired++;
+        }
+      }
+
+      // 基础属性提升: args 必须有 [pokemonId, stat]
+      if (mod.typeId === 'BASE_STAT_BOOSTER') {
+        if (!mod.args || mod.args.length < 2) {
+          const stat = mod.typePregenArgs?.[0] ?? 0;
+          const pokemonId = mod.args?.[0] ?? 0;
+          mod.args = [pokemonId, stat];
+          mod.className = 'BaseStatModifier';
+          repaired++;
+        }
+      }
+
+      // 招式类型威力提升: args 必须有 [pokemonId, moveType, boostPercent]
+      if (mod.typeId === 'ATTACK_TYPE_BOOSTER') {
+        if (!mod.args || mod.args.length < 3) {
+          const moveType = mod.typePregenArgs?.[0] ?? 0;
+          const pokemonId = mod.args?.[0] ?? 0;
+          const boost = mod.args?.[2] ?? 20;
+          mod.args = [pokemonId, moveType, boost];
+          mod.className = 'AttackTypeBoosterModifier';
+          repaired++;
+        }
+      }
+
+      // 太晶碎块: args 必须有 [pokemonId, teraType]
+      if (mod.typeId === 'TERA_SHARD') {
+        if (!mod.args || mod.args.length < 2) {
+          const teraType = mod.typePregenArgs?.[0] ?? 0;
+          const pokemonId = mod.args?.[0] ?? 0;
+          mod.args = [pokemonId, teraType];
+          mod.className = 'TerastallizeModifier';
+          repaired++;
+        }
+      }
+
+      // 薄荷: args 必须有 [pokemonId, nature]
+      if (mod.typeId === 'MINT') {
+        if (!mod.args || mod.args.length < 2) {
+          const nature = mod.typePregenArgs?.[0] ?? 0;
+          const pokemonId = mod.args?.[0] ?? 0;
+          mod.args = [pokemonId, nature];
+          mod.className = 'PokemonNatureChangeModifier';
+          repaired++;
+        }
+      }
+
+      // 心之水滴: 修复 className 和 args
+      // PokemonNatureWeightModifier: args=[pokemonId]
+      if (mod.typeId === 'SOUL_DEW') {
+        let needFix = false;
+        if (!mod.className || mod.className !== 'PokemonNatureWeightModifier') {
+          mod.className = 'PokemonNatureWeightModifier';
+          needFix = true;
+        }
+        // 心之水滴是普通携带物, args 应该只有 [pokemonId]
+        // 如果之前错误地加了第二个参数(teraType), 去掉它
+        if (mod.args && mod.args.length > 1) {
+          mod.args = [mod.args[0]];
+          needFix = true;
+        }
+        if (!mod.args || mod.args.length === 0) {
+          mod.args = [0];
+          needFix = true;
+        }
+        if (needFix) repaired++;
+      }
+
+      // 携带物但没有 pokemonId 的，补上
+      if (isHeld && (!mod.args || mod.args.length === 0)) {
+        mod.args = [0];
+        repaired++;
+      }
+
+      // 确保有 typePregenArgs 字段
+      if (cls.isGenerator && !mod.typePregenArgs) {
+        mod.typePregenArgs = [];
+        repaired++;
+      }
+    }
+  }
+
+  repairList(data.modifiers);
+  repairList(data.enemyModifiers);
+  return repaired;
+}
+
+function pickModifier(typeId) {
+  const modal = document.getElementById('modifierModal');
+  modal.style.display = 'none';
+
+  const { isEnemy, pokemonIdx } = modifierPickerTarget;
+  const data = saveFiles[currentFile].data;
+  const list = isEnemy ? data.enemyModifiers : data.modifiers;
+  if (!list) {
+    if (isEnemy) data.enemyModifiers = [];
+    else data.modifiers = [];
+  }
+  const target = isEnemy ? data.enemyModifiers : data.modifiers;
+
+  // 使用 createRealModifier 生成正确结构的 modifier
+  const newMod = createRealModifier(typeId, [], pokemonIdx, isEnemy);
+
+  target.push(newMod);
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+
+  const name = MODIFIER_NAMES[typeId] || typeId;
+  if (pokemonIdx !== null && pokemonIdx !== undefined) {
+    renderPokemonPanel();
+    setTimeout(() => {
+      const cards = document.querySelectorAll('.pokemon-card');
+      cards.forEach(c => c.classList.add('expanded'));
+    }, 0);
+  } else {
+    renderItemsPanel();
+  }
+  setStatus(`已添加 ${name}`, 'success');
+}
+
+// 添加展开后的生成器类型具体选项 (带 typePregenArgs)
+function pickExpandedModifier(baseTypeId, typePregenArgs, className, isHeld) {
+  const modal = document.getElementById('modifierModal');
+  modal.style.display = 'none';
+
+  const { isEnemy, pokemonIdx } = modifierPickerTarget;
+  const data = saveFiles[currentFile].data;
+  const list = isEnemy ? data.enemyModifiers : data.modifiers;
+  if (!list) {
+    if (isEnemy) data.enemyModifiers = [];
+    else data.modifiers = [];
+  }
+  const target = isEnemy ? data.enemyModifiers : data.modifiers;
+
+  // 使用 createRealModifier 生成正确结构的 modifier
+  const newMod = createRealModifier(baseTypeId, typePregenArgs, pokemonIdx, isEnemy);
+
+  target.push(newMod);
+  saveFiles[currentFile].dirty = true;
+  renderFileTabs();
+
+  // 从 MODIFIER_EXPANDED 找名字
+  let itemName = baseTypeId;
+  if (typeof MODIFIER_EXPANDED !== 'undefined') {
+    const found = MODIFIER_EXPANDED.find(e => e.baseTypeId === baseTypeId
+      && JSON.stringify(e.typePregenArgs) === JSON.stringify(typePregenArgs));
+    if (found) itemName = found.name;
+  }
+
+  if (pokemonIdx !== null && pokemonIdx !== undefined) {
+    renderPokemonPanel();
+    setTimeout(() => {
+      const cards = document.querySelectorAll('.pokemon-card');
+      cards.forEach(c => c.classList.add('expanded'));
+    }, 0);
+  } else {
+    renderItemsPanel();
+  }
+  setStatus(`已添加 ${itemName}`, 'success');
+}
+
+function closeModifierModal() {
+  document.getElementById('modifierModal').style.display = 'none';
+}
+</script>
+
+<!-- 道具选择弹窗 -->
+<div id="modifierModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; justify-content:center; align-items:center;">
+  <div style="background:#1a1a2e; border:1px solid rgba(255,255,255,0.2); border-radius:12px; width:600px; max-width:90vw; max-height:80vh; display:flex; flex-direction:column;">
+    <div style="padding:15px 20px; border-bottom:1px solid rgba(255,255,255,0.1); display:flex; justify-content:space-between; align-items:center;">
+      <h3 id="modifierModalTitle" style="color:#ffd700; font-size:18px;">添加道具</h3>
+      <button class="btn btn-danger btn-sm" onclick="closeModifierModal()" style="padding:4px 10px;">✕</button>
+    </div>
+    <div style="padding:10px 20px; border-bottom:1px solid rgba(255,255,255,0.1);">
+      <input id="modifierSearch" type="text" placeholder="搜索道具名称或ID..." oninput="renderModifierList(this.value)" style="width:100%; padding:10px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:6px; color:#e0e0e0; font-size:14px;">
+    </div>
+    <div id="modifierList" style="flex:1; overflow-y:auto; padding:10px 20px;"></div>
+  </div>
+</div>
+
+<!-- 技能选择弹窗 -->
+<div id="moveModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; justify-content:center; align-items:center;">
+  <div style="background:#1a1a2e; border:1px solid rgba(255,255,255,0.2); border-radius:12px; width:600px; max-width:90vw; max-height:80vh; display:flex; flex-direction:column;">
+    <div style="padding:15px 20px; border-bottom:1px solid rgba(255,255,255,0.1); display:flex; justify-content:space-between; align-items:center;">
+      <h3 id="moveModalTitle" style="color:#ffd700; font-size:18px;">选择技能</h3>
+      <button class="btn btn-danger btn-sm" onclick="closeMoveModal()" style="padding:4px 10px;">✕</button>
+    </div>
+    <div style="padding:10px 20px; border-bottom:1px solid rgba(255,255,255,0.1);">
+      <input id="moveSearch" type="text" placeholder="搜索技能名称、ID、效果、属性..." oninput="renderMoveList(this.value)" style="width:100%; padding:10px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:6px; color:#e0e0e0; font-size:14px;">
+    </div>
+    <div id="moveList" style="flex:1; overflow-y:auto; padding:10px 20px;"></div>
+  </div>
+</div>
+
+</body>
+</html>
