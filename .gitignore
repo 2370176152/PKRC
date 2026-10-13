@@ -1,0 +1,50 @@
+# ============================================================
+# 二进制游戏资产（本仓库只保留文本资产，放置位置见 README「组装指南」）
+# ============================================================
+game/server/dist/images/
+game/server/dist/audio/
+game/server/dist/fonts/
+game/pokerogue-win32-x64/
+
+# ============================================================
+# Node 便携运行时（放置位置见 shared/runtime/README.md）
+# ============================================================
+shared/runtime/node.exe
+shared/runtime/npm
+shared/runtime/npm.cmd
+shared/runtime/npx
+shared/runtime/npx.cmd
+shared/runtime/corepack
+shared/runtime/corepack.cmd
+shared/runtime/nodevars.bat
+shared/runtime/install_tools.bat
+shared/runtime/node_etw_provider.man
+shared/runtime/node_modules/
+
+# ============================================================
+# 二进制数据表与攻略图（文本等价物在 shared/data/ 与 tools/save-editor/data/）
+# ============================================================
+*.xlsx
+*.png
+*.prsv
+
+# ============================================================
+# 日志、临时文件与本地缓存
+# ============================================================
+*.log
+node_output.txt
+node_error.txt
+.node_pid
+.check.mjs
+.workbuddy/
+node_cahce/
+node_global/
+
+# ============================================================
+# Node / OS 杂项
+# ============================================================
+node_modules/
+npm-debug.log*
+.DS_Store
+Thumbs.db
+desktop.ini
