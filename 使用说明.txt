@@ -1,0 +1,13 @@
+PKRC 整理版组装包
+================
+
+1. 本包含整理后的全部文本资产；以下二进制目录为空骨架，需从旧版 PKRC 目录复制填入：
+   - game/server/dist/images\   （约 860MB）
+   - game/server/dist/audio\    （约 130MB）
+   - game/server/dist/fonts\    （约 10MB）
+   - game/pokerogue-win32-x64\  （约 232MB）
+   - shared/runtime/             （node.exe、npm/npx/corepack、nodevars.bat 等 + node_modules\）
+
+2. 详细放置说明见 README.md「组装指南」章节；Node 依赖说明见 shared/runtime/README.md。
+
+3. 组装完成后双击 game/start-game.bat 启动游戏。
