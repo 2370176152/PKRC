@@ -1,0 +1,47 @@
+{
+  "_comment": "PKRC 锚点树构建环境快照（B-6）。本文件由 tools/verify-env.cjs --snapshot 生成，供 tools/verify-env.cjs 校验。入库。",
+  "generatedAt": "2026-10-14T07:27:05.936Z",
+  "upstreamAnchor": {
+    "repo": "pagefaultgames/pokerogue",
+    "commit": "90df65097b6d",
+    "note": "锚点树的 package.json 曾被 A1 人为降级（vite ^8.0.10 → ^7.3.1 并加 vite-tsconfig-paths）；B-5 已复原为上游原文。可用 raw.githubusercontent.com 按 commit 取回。",
+    "sourceUrls": {
+      "package.json": "https://raw.githubusercontent.com/pagefaultgames/pokerogue/90df65097b6d/package.json",
+      "pnpm-lock.yaml": "https://raw.githubusercontent.com/pagefaultgames/pokerogue/90df65097b6d/pnpm-lock.yaml"
+    }
+  },
+  "toolchain": {
+    "node": "24.9.0",
+    "nodeEngines": ">=24.9.0",
+    "pnpm": "10.33.2",
+    "vite": "8.0.10",
+    "typescript": "6.0.3",
+    "rolldown": "1.0.0-rc.17"
+  },
+  "files": {
+    "package.json": "3dc68d82c9e3efb37d9c98e1135fd6958ce94d682c749d30c2fc3c929a188371",
+    "pnpm-lock.yaml": "0e617a13ea2f9007284f44898255449fd5ae4dc207aa2f34d0a771791539e3bd",
+    "vite.config.ts": "84b7ab09b0aa031b85781f360e408aa9e6bcb09edc1f0d1ea2757f894ad15d82",
+    "tsconfig.json": "cb80ab31fdcd7b34da9968b182bdd5f775e22d62574b365ba81558612615acc1"
+  },
+  "nodeModules": {
+    "topLevelEntries": 44,
+    "pnpmPackages": 346
+  },
+  "nativeBindings": [
+    {
+      "name": "rolldown (win32-x64)",
+      "present": true
+    }
+  ],
+  "dirs": {
+    "assets": {
+      "exists": true,
+      "jsonFiles": 2
+    },
+    "locales": {
+      "exists": true,
+      "jsonFiles": 1738
+    }
+  }
+}
