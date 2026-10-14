@@ -31,6 +31,7 @@
  *   r0    → CONSTELLATION_EXCLUSIVE_REGISTRY (Record<speciesId, {exclusiveNodes, hooks}>)
  *   qA    → CONSTELLATION_SLOTS            (6)
  *   lU    → CONSTELLATION_REFUND_TABLE     ([2,3,4,6,8,10])
+ *   DT    → CONSTELLATION_RESET_PT_COST    (1e4=10000；勘误 E4)
  *   nSe   → CONSTELLATION_STAT_GAIN        ({1:15,2:20,5:25})
  *   ASe   → CONSTELLATION_TYPE_MULT        (1.2)
  *   aSe   → CONSTELLATION_GAIN_MULT        (1.15)
@@ -58,6 +59,10 @@ export const CONSTELLATION_SLOTS = 6;
 
 /** 退点表：点亮 N 个节点消耗的总点数（产物 lU=[2,3,4,6,8,10]） */
 export const CONSTELLATION_REFUND_TABLE: readonly number[] = [2, 3, 4, 6, 8, 10];
+
+/** 重置全部命座的 PT 消耗（产物 `DT=1e4`；勘误 E4）。
+ *  用途：命座界面「重置命座 (10000 PT)」+ 结算校验（`PT不足，需要 10000 PT。`）。 */
+export const CONSTELLATION_RESET_PT_COST = 10000;
 
 /** 通用命座的种族值加成（产物 nSe={1:15,2:20,5:25}） */
 export const CONSTELLATION_STAT_GAIN: Readonly<Record<number, number>> = { 1: 15, 2: 20, 5: 25 };
@@ -89,6 +94,12 @@ export const CONSTELLATION_STAT_KEY_MAP: Readonly<Record<string, Stat>> = {
 // ===========================================================================
 
 export interface ConstellationCodexEntry {
+  /**
+   * 命座条目 id（产物中仅「解明系」首条携带，值 = `Hw`（= `"jieming"`）；
+   * 用于 `hasJiemingConstellation` 的 `entry.id?.startsWith("jieming")` 判定。
+   * 通用条目/其余系统无此字段 → 可选。（规范勘误 E1，见 A3-迁移规范 §8）
+   */
+  id?: string;
   name: string;
   description: string;
 }
@@ -182,8 +193,9 @@ export interface ConstellationExclusiveHooks {
   applyBaseStats?(node: number, stats: number[], level: number, choices: Record<number, unknown>): void;
   /** 专属「属蕴」节点伤害倍率：typeDamageMultiplier(pokemon, level, choices) */
   typeDamageMultiplier?(pokemon: Pokemon, level: number, choices: Record<number, unknown>): number;
-  /** 专属「财源」节点收益倍率：gainMultiplier(pokemon, level, choices) */
-  gainMultiplier?(pokemon: Pokemon, level: number, choices: Record<number, unknown>): number;
+  /** 专属「财源」节点收益倍率：gainMultiplier(gainKey, level, choices)
+   *  `gainKey` = 收益项 key（`"pt"` | `"money"` | `"ptSettle"`），非 Pokemon（勘误 E3）。 */
+  gainMultiplier?(gainKey: string, level: number, choices: Record<number, unknown>): number;
 }
 
 export interface ConstellationRegistration extends ConstellationExclusiveHooks {
@@ -343,9 +355,11 @@ export function constellationTypeMultiplier(
   return choices[3] === type ? CONSTELLATION_TYPE_MULT : 1;
 }
 
-/** 「财源」收益倍率（产物 LSe "constellationGainMultiplier"） */
+/** 「财源」收益倍率（产物 LSe "constellationGainMultiplier"）|
+ *  注：产物 `LSe(n,s,i)` 的 `n` 是**收益项 key 字符串**（`"pt"` / `"money"` / `"ptSettle"`），
+ *      而非 Pokemon —— 规范勘误 E3（见 A3-迁移规范 §8.1）。 */
 export function constellationGainMultiplier(
-  pokemon: Pokemon,
+  gainKey: string,
   speciesId: number,
   data: ConstellationData | undefined,
 ): number {
@@ -355,20 +369,21 @@ export function constellationGainMultiplier(
   }
   const choices = data?.constellationChoices?.[speciesId] ?? {};
   if (constellationNodeMode(speciesId, 4, data) === "exclusive") {
-    return CONSTELLATION_EXCLUSIVE_REGISTRY[speciesId]?.gainMultiplier?.(pokemon, level, choices) ?? 1;
+    return CONSTELLATION_EXCLUSIVE_REGISTRY[speciesId]?.gainMultiplier?.(gainKey, level, choices) ?? 1;
   }
-  return choices[4] === pokemon.species.speciesId ? CONSTELLATION_GAIN_MULT : 1;
+  return choices[4] === gainKey ? CONSTELLATION_GAIN_MULT : 1;
 }
 
-/** 队伍总收益倍率：各不同种族 4 命之和（产物 J1 "partyConstellationGainMultiplier"） */
+/** 队伍总收益倍率：各不同种族 4 命之和（产物 J1 "partyConstellationGainMultiplier"）|
+ *  注：`gainKey` 同 `constellationGainMultiplier`（勘误 E3）。 */
 export function partyConstellationGainMultiplier(
-  pokemon: Pokemon,
+  gainKey: string,
   speciesIds: number[],
   data: ConstellationData | undefined,
 ): number {
   let bonus = 0;
   for (const speciesId of new Set(speciesIds)) {
-    bonus += constellationGainMultiplier(pokemon, speciesId, data) - 1;
+    bonus += constellationGainMultiplier(gainKey, speciesId, data) - 1;
   }
   return 1 + bonus;
 }
