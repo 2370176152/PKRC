@@ -16,7 +16,7 @@
 |---|---|---|---|
 | **M-1** | BLOCK-3「clone 卡住，建议放弃 partial clone 改完整 clone；若代理不可用则换源」 | ✅ **直连 GitHub 完全可用**。`git clone --depth 1 --single-branch --branch beta` → **21 MB，数十秒完成**（含 `src/` 全量 TS 源码）。**根因不是代理，而是 `--filter=blob:none` 的 promisor 按需拉取在受限网络下反复超时** | A0 可**立即完成**，关键路径解锁 |
 | **M-2** | 「上游要求 Node 22（`.nvmrc`，2025-04-15 commit #5586）」 | ⚠️ 该结论**对 2025-04 成立**，但**上游 beta 现状是 `v24.9.0`**（实测 `raw/beta/.nvmrc` → `v24.9.0`）。包管理器为 **`pnpm@10.34.5`**（实测 `packageManager` 字段） | 构建期工具链版本需按**锁定的源码分支**定，不按"22"一刀切 |
-| **M-3** | 「上游基线锁定在 2025-06 ~ 2025-08，v1.11.x」 | ⚠️ **区间正确但偏保守**。实测找到**硬上界 = 2025-09-22**：locales 仓库 commit `1d4c019`「Removed now unused es-MX, zh-CN and zh-TW」删除了 `zh-CN` 目录。本仓库 `dist/locales/` **仍为 `zh-CN/zh-TW`** → **早于 2025-09-22** | A0-2 从"区间"升级为"**单点可锁定**"，见 §2 |
+| **M-3** | 「上游基线锁定在 2025-06 ~ 2025-08，v1.11.x」 | ❌ **原判断已被 A0 报告推翻**。本节曾据 `dist/locales/` 仍为 `zh-CN/zh-TW` 推断"早于 2025-09-22"，但实测证明 **modder 从未同步 locales submodule**（locales 停留在 2025-06 前，与代码脱节约一年）→ **locales 不能作代码基线判据**。正确锚点 = **`90df65097b6d`（2026-06-08, v1.11.22）** | 见 §2.1 撤回声明；A0 用招式值 + 类名「两把硬尺子」重新定位 |
 
 > **一句话**：BLOCK-1/2/3 **全部可解，且其中两项（BLOCK-2/3）本轮已实测解掉**。A0 不存在真实阻塞。
 
@@ -65,7 +65,28 @@
 
 > 派单 §4.2 要求「必须**实际执行**，不是纸面推演」。以下四项**全部已实际执行**。
 
-## 2.1 C-1 上游版本对齐 —— ✅ **已从"区间"收敛到"硬上界"**
+## 2.1 C-1 上游版本对齐 —— ⚠️ **本节结论已作废，以 A0 报告为准**
+
+> **🔴 撤回声明（2026-10-13 晚，由全栈 A0 报告推翻）**
+>
+> 本节原判「本仓库产物**严格早于 2025-09-22**」**是错的**，整节判据作废。
+>
+> **错因**：用 `dist/locales/zh-CN` 的存在来给**代码**定版。但上游定位报告实测证明：
+> **modder 从未同步 locales submodule** —— 改版 locales 停留在 2025-06 之前
+> （`biome.json` 单数、无 `pokemon-category.json`），与**代码基线（2026-06）脱节约一年**。
+> 即：locales 是**陈旧的外挂数据**，**不能作为代码基线判据**。
+>
+> **正确结论**（见 `docs/sourcemigration/A0-上游定位报告.md` §1.3 / §1.6）：
+>
+> | 项 | 更正后的值 |
+> |---|---|
+> | 版本 | `1.11.22` |
+> | 内容基线窗口 | `[2026-06-08, 2026-06-15)` |
+> | **推荐锚点** | **`90df65097b6d`（2026-06-08，Champions Balance #7232）** |
+> | locales 判据 | ❌ **彻底弃用**（原 v1 §3.1 整节作废） |
+>
+> **下面的实测数据保留**——它作为「**locales 与代码脱节**」这一事实的**证据**仍然有效，
+> 只是**不能**据此推代码日期。保留原样以便对照。
 
 ### 实测方法（可复现）
 
@@ -81,7 +102,7 @@ git log --format='%h %ad %s' --date=short -- 'zh-CN'
 ### 实测输出
 
 ```
-1d4c0199 2025-09-22 Removed now unused es-MX, zh-CN and zh-TW     ← 硬上界
+1d4c0199 2025-09-22 Removed now unused es-MX, zh-CN and zh-TW     ← locales 仓库里的删除点
 877daafa 2025-09-22 Add Oval Stone entries (#238)
 37e9a389 2025-09-22 Pontoon: Update Chinese (Simplified) (zh-CN) ...
 74de730a 2025-09-11 Camel case remaining keys and remove missing keys (#237)
@@ -89,15 +110,18 @@ e0657485 2025-08-27 "plasma_sage" key renamed to "plasmaSage" (#235)
 69979a8b 2025-08-25 Pontoon: Update Chinese (Simplified) (zh-CN) ...
 ```
 
-### 判定
+### 判定（⚠️ 原判定已作废，见上方撤回声明）
 
 | 事实 | 值 |
 |---|---|
 | locales 中文本地化目录**改名/删除**的 commit | `1d4c0199`，**2025-09-22** |
 | 本仓库 `dist/locales/` 中文目录名 | **`zh-CN` / `zh-TW`**（实测，17 个语言目录） |
-| **结论** | 本仓库产物**严格早于 2025-09-22** |
+| ~~原结论~~ | ~~本仓库产物**严格早于 2025-09-22**~~ ← **❌ 作废** |
+| **更正后** | 只能说明「**locales 快照早于 2025-09-22**」；**代码**基线是 `90df65097b6d`（2026-06-08） |
 
-> **这比 06 号报告的「2025-06 ~ 2025-08」更紧**：上界从"2025-10 之前"收敛到"**2025-09-22 之前**"。
+> ⚠️ **教训**：判定代码基线**必须用代码本身的特征**（招式数据、类名、构建签名），
+> 不能用外挂数据（locales / 资产）的日期——它们可能与代码**各自独立演进**。
+> A0 报告用的「两把硬尺子」（`SNAP_TRAP` 招式值 + `SpeciesDataRegistry` 类名）才是正确方法。
 
 ### 进一步收紧的空间（下一步执行项）
 
@@ -137,7 +161,7 @@ e0657485 2025-08-27 "plasma_sage" key renamed to "plasmaSage" (#235)
 | 本机 corepack | **0.34.6**（随 Node 22 自带） | 实测 |
 
 > ⚠️ **修正**：09 号清单说「上游要求 Node 22」——这在**锁定到 2025 年中的源码**时成立；但若直接用 beta HEAD，需按 **Node 24 + pnpm 10** 配工具链。
-> **建议**：既然目标是 **2025-09-22 之前的版本**，应**按锁定 commit 的 `.nvmrc`/`packageManager` 定版本**，而非照搬 beta。
+> **建议**：锚点已更正为 **`90df65097b6d`（2026-06-08）**，应**按该锚点自带的 `.nvmrc`/`packageManager` 定版本**，而非照搬 beta。实测该锚点用 Node 24.9.0 + pnpm 10.33.2 可成功构建（见 A1 报告）。
 
 ### 判据修正（确认 06 号报告的两段式）
 
@@ -390,8 +414,9 @@ NODE_PATH=../../shared/runtime/node_modules ../../shared/runtime/node.exe test-s
 | 直连 GitHub 可用，clone 21 MB | `git clone --depth 1 --single-branch --branch beta` 实测，退出码 0 |
 | 上游 beta `.nvmrc` = v24.9.0 | `raw.githubusercontent.com/.../beta/.nvmrc` 实测 |
 | 上游 beta `packageManager` = pnpm@10.34.5 | 上游 `package.json` 实测 |
-| locales 改名硬上界 2025-09-22 | `pokerogue-locales` commit `1d4c0199`「Removed now unused es-MX, zh-CN and zh-TW」 |
-| 本地 locales 仍为 `zh-CN`/`zh-TW` | `ls game/server/dist/locales/`（17 目录） |
+| locales 删除点 2025-09-22（⚠️ **不作代码判据**） | `pokerogue-locales` commit `1d4c0199`「Removed now unused es-MX, zh-CN and zh-TW」；因 modder 未同步 locales submodule，**只能给 locales 定版，不能给代码定版** |
+| 本地 locales 仍为 `zh-CN`/`zh-TW` | `ls game/server/dist/locales/`（17 目录）—— 这是 locales **陈旧**的证据，非代码基线证据 |
+| **代码锚点 = `90df65097b6d`（2026-06-08）** | A0 报告用「`SNAP_TRAP` 招式值 + `SpeciesDataRegistry` 类名」两把硬尺子定位（见 `A0-上游定位报告.md`） |
 | 上游 `.gitmodules` 两个 submodule | `raw/.../beta/.gitmodules` 实测 |
 | `talent*.json` 为魔改新增 | 本地 64 文件 vs 上游 92 文件清单比对 |
 | dist 总计 758.8 MB / 38,061 文件 | `tools/inventory-assets.cjs` 实测输出 |

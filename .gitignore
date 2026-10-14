@@ -64,6 +64,51 @@ dist-a12/
 game/logs/
 
 # ============================================================
+# 源码化构建产物（第二阶段 A3-13 / 第三阶段 S7/S8c 会用到）
+# ------------------------------------------------------------
+# ⚠️ 这里的三条是第二阶段新增。背景：A3-13 将在
+#    docs/sourcemigration/A3-migration/ 下跑 `tsc` + `vite build`，
+#    产物是**数百 MB 的 dist/**。若未忽略，一次 `git add -A` 就会把
+#    整个构建输出提交进仓库 —— 且 dist 内容每次构建都变，会永久污染 diff。
+# ============================================================
+
+# ① 迁移树的构建输出（锚定到该目录，避免误伤别处）
+docs/sourcemigration/A3-migration/dist/
+
+# ② 仓库根级 dist/（若将来在根目录跑构建）。
+#    注意用 `/dist/` 而非 `dist/`：后者会匹配任意深度的 dist/，
+#    连 game/server/dist/（发行版资产，需入库）也会被拖下水。
+#    且 A5-01 产物切换需要往 game/server/dist/ 新增文件，
+#    一旦被忽略就会静默漏提交。
+/dist/
+
+# ③ TypeScript 增量编译缓存（tsc -b / vite 都会产生）
+*.tsbuildinfo
+
+# ④ Vite 依赖预构建缓存 / 测试覆盖率 / pnpm 存储
+.vite/
+coverage/
+.pnpm-store/
+
+# ⑤ 发布脚本（B-4）产生的中间与备份目录 —— 第二阶段新增
+# ------------------------------------------------------------
+# ⚠️ 背景：B-4 的发布流程会在 game/server/ 下产生
+#      · .release-staging/dist.new/   组装暂存（约 758 MB）
+#      · backups/dist.<时间戳>/       历史备份（每份约 758 MB）
+#      · dist.old/ / dist.rollback-*/ 切换与回滚的临时改名
+#    这些**全部**是「一次发布就生成、内容每次都变、体积数百 MB」的产物。
+#    若不忽略，一次 `git add -A` 就会把 GB 级数据提交进仓库。
+#
+#    注意：game/server/dist/ 本身**不能整体忽略**（JS/CSS/HTML 需入库），
+#    只忽略其中的大资产目录（见文件开头的 images/audio/fonts 规则），
+#    所以这里必须**逐个**点名发布中间目录，不能用通配的 `dist*`。
+game/server/.release-staging/
+game/server/backups/
+game/server/dist.old/
+game/server/dist.rollback-*/
+game/server/dist.broken/
+
+# ============================================================
 # 原始仓库副本（PKRC/ 为独立 git 仓库，纳入会造成 gitlink 与内容重复）
 # 注：PKRC-repo.bundle 作为原始版本的单文件备份保留入库
 # ============================================================
