@@ -13,7 +13,7 @@ import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-const suites = ["gesture-resolver.test.js"];
+const suites = ["gesture-resolver.test.js", "input-arbiter.test.js"];
 
 let failed = 0;
 for (const suite of suites) {

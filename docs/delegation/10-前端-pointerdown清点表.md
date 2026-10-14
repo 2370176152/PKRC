@@ -1,10 +1,15 @@
 # 10 · 前端：pointerdown 完整清点表（F-1 供料）
 
 > **角色**：前端工程师
-> **性质**：v2 任务看板 §六之二 **F-1（P0）** + 09 并行清单 §2.1
-> **用途**：① 直接喂给全栈 **A2（魔改点提取）**；② 自己 S6 的实现需求清单
+> **性质**：v2 任务看板 §六之二 **F-1（P0）** + 派单 15 §三 **F-1（🔴 urgent）**
+> **用途**：① 直接喂给全栈 **A2/A3**；② 自己 S6 的实现需求清单
 > **扫描对象**：`game/server/dist/assets/loading-scene-By2k7Qfx.js`（4,884,308 bytes）
-> **编制日期**：2026-10-13
+> **编制日期**：2026-10-13 ｜ **回填上游文件列：2026-10-14**
+>
+> **🔴 2026-10-14 更新（F-1 回填完成）**：上游基线 = **V1.11.22（`90df65097b6d`）**，本地参考树
+> `.build-tools/tarball-src/pokerogue-90df65097b6df76f713e6bd108afa84499e8b993/`。
+> **55 条全部已回填上游文件路径 + 「上游已有 / 改版新增」标注**（见 §二）。
+> **最重要的发现**：**上游 canvas 层 pointerdown 仅存在于 6 个文件**，其余全部是改版新增（见 §二之零）。
 
 ---
 
@@ -53,70 +58,108 @@
 
 ---
 
+## 二之零、🔴 上游 canvas 层 pointerdown 的全部落点（6 文件）
+
+> **回填基准**：上游 V1.11.22（`90df65097b6d`）。命令：
+> `grep -rn '\.on("pointerdown"\|addEventListener("pointerdown"' <upstream>/src --include=*.ts`
+
+| 上游文件 | 行 | 用途 |
+|---|---|---|
+| `src/touch-controls.ts` | 74 / 99 | 虚拟手柄 `[data-key]` 按钮（**本地缺失**，见 20 号文档） |
+| `src/ui/handlers/modal-ui-handler.ts` | 138 | 模态按钮 `buttonBgs[a]` |
+| `src/ui/handlers/admin-ui-handler.ts` | 210 | 管理员 Link/Unlink 按钮 |
+| `src/ui/handlers/login-register-info-container-ui-handler.ts` | 104 / 108 / 112 | 用户名 / 下载存档 / 切语言 |
+| `src/ui/handlers/form-modal-ui-handler.ts` | 137 / 144 | 表单模态确认 |
+| `src/ui/handlers/oauth-providers-ui-handler.ts` | 94 / 104 | OAuth 提供方图标 |
+| `src/ui/settings/move-touch-controls-handler.ts` | 307 | 虚拟手柄拖拽定位（DOM） |
+
+**⇒ 结论**：上游 canvas 层的鼠标支持**只覆盖「模态/表单/登录/OAuth/管理员」这些边缘界面**。
+**队伍 / 背包 / 图鉴 / 选人 / 摘要 / 菜单 / 战斗指令 —— 上游一行 pointerdown 都没有。**
+
+---
+
 ## 二、交互点完整清点表（38 处 canvas 交互点）
 
 > **语义分类**：`{kind:"button"}` / `{kind:"cursor"}` / `{kind:"scroll"}` / `{kind:"custom"}`
-> **上游文件列**：待 A0 clone 完成后回填（当前上游未 clone，此项留空并标注）
+> **上游列**：✅=上游已有等价实现 ｜ 🔴=改版新增（上游无）
 
 ### 2.1 上游原有场景（18 处）
 
-| # | 产物位置 | 场景（UiMode） | 触发行为 | 建议 ActionSpec | 上游文件（待补） |
-|---|---|---|---|---|---|
-| 1 | `L.on("pointerdown",()=>this.onOptionPointer(T))` | PARTY | 私有 `onOptionPointer` | `{kind:"cursor"}` | `src/ui/party-ui-handler.ts` |
-| 2 | `S.on("pointerdown",()=>{...})` | PARTY | 槽位选择 | `{kind:"cursor"}` | `src/ui/party-ui-handler.ts` |
-| 3 | `a.on("pointerdown",()=>{...})` | PARTY | 取消/返回 | `{kind:"button",button:CANCEL}` | `src/ui/party-ui-handler.ts` |
-| 4 | `O.on("pointerdown",()=>this.onRowPointer(I))` | SUPER_BACKPACK | 行选择 | `{kind:"cursor"}` | `src/ui/*-backpack*` |
-| 5 | `L.on("pointerdown",()=>this.onMoveSlotPointer(S))` | FIGHT/SUMMARY | 招式槽 | `{kind:"cursor"}` | `src/ui/fight-ui-handler.ts` |
-| 6 | `O.on("pointerdown",()=>{...getMode()===V.SUMMARY&&this.processInput(w.CANCEL)})` | SUMMARY | 返回 | `{kind:"button",button:CANCEL}` | `src/ui/summary-ui-handler.ts` |
-| 7 | `a.on("pointerdown",()=>{!this.visible\|\|!s()\|\|(this.setCursor(A),this.toggleOptionState(A),E.ui.playSelect())})` | OPTION_SELECT | 选项开关 | `{kind:"cursor",then:SUBMIT}` | `src/ui/option-select-ui-handler.ts` |
-| 8 | `A.on("pointerdown",()=>{i()&&s(a)})` | 设置下拉 | 下拉项 | `{kind:"custom"}` | `src/ui/settings/*` |
-| 9 | `A.on("pointerdown",()=>this.onSessionSlotPointer(s))` | SAVE_SLOT | 存档槽 | `{kind:"cursor"}` | `src/ui/save-slot-select-ui-handler.ts` |
-| 10 | `se.on("pointerdown",(We,Ve,qe)=>{this.onStarterGridPointer(...)})` | STARTER_SELECT | 网格选人 | `{kind:"cursor",index}` | `src/ui/starter-select-ui-handler.ts` |
-| 11 | `qe.on("pointerdown",()=>this.onTeamSlotPointer(We))` | STARTER_SELECT | 队伍槽 | `{kind:"cursor",index}` | `src/ui/starter-select-ui-handler.ts` |
-| 12 | `Pe.on("pointerdown",()=>{...getMode()===V.POKEDEX&&this.processInput(w.CANCEL)})` | POKEDEX | 返回 | `{kind:"button",button:CANCEL}` | `src/ui/pokedex-ui-handler.ts` |
-| 13 | `d.on("pointerdown",()=>{...getMode()===V.POKEDEX_PAGE&&this.processInput(w.CANCEL)})` | POKEDEX_PAGE | 返回 | `{kind:"button",button:CANCEL}` | `src/ui/pokedex-page-ui-handler.ts` |
-| 14 | `f.on("pointerdown",()=>this.onMenuRowPointer(D))` | MENU | 菜单行 | `{kind:"cursor"}` | `src/ui/menu-ui-handler.ts` |
-| 15 | `A.on("pointerdown",()=>{...buttonActions[A]()})` | 提示弹窗 | 模态按钮 | `{kind:"custom"}` | `src/ui/message-ui-handler.ts` |
-| 16 | `Pe...on("pointerdown",()=>{...processInput(w.CANCEL)})`（图鉴内） | POKEDEX | 返回 | `{kind:"button",button:CANCEL}` | 同上 |
-| 17 | `this.hit.on("pointerdown",O)` | 通用按钮组件 | 组件回调 | `{kind:"custom"}` | `src/ui/button.ts` |
-| 18 | `A.on("pointerdown",()=>{i()&&s(a)})`（下拉第二处） | 设置下拉 | 下拉项 | `{kind:"custom"}` | `src/ui/settings/*` |
+| # | 产物位置 | 场景（UiMode） | 触发行为 | 建议 ActionSpec | 上游文件 | 上游/新增 |
+|---|---|---|---|---|---|---|
+| 1 | `L.on("pointerdown",()=>this.onOptionPointer(T))` | PARTY | 私有 `onOptionPointer` | `{kind:"cursor"}` | `src/ui/handlers/party-ui-handler.ts` | 🔴 新增 |
+| 2 | `S.on("pointerdown",()=>{this.onPointerSelect?.()})` | PARTY | 槽位选择 | `{kind:"cursor"}` | `src/ui/handlers/party-ui-handler.ts` | 🔴 新增 |
+| 3 | `a.on("pointerdown",()=>{this.onPointerPress?.()})` | PARTY | 取消/返回 | `{kind:"button",button:CANCEL}` | `src/ui/handlers/party-ui-handler.ts` | 🔴 新增 |
+| 4 | `O.on("pointerdown",()=>this.onRowPointer(I))` | SUPER_BACKPACK | 行选择 | `{kind:"cursor"}` | `src/ui/handlers/super-backpack-ui-handler.ts`（**上游不存在**） | 🔴 新增 |
+| 5 | `L.on("pointerdown",()=>this.onMoveSlotPointer(S))` | FIGHT | 招式槽 | `{kind:"cursor"}` | `src/ui/handlers/fight-ui-handler.ts` | 🔴 新增 |
+| 6 | `O.on("pointerdown",()=>{...getMode()===V.SUMMARY&&this.processInput(w.CANCEL)})` | SUMMARY | 返回 | `{kind:"button",button:CANCEL}` | `src/ui/handlers/summary-ui-handler.ts` | 🔴 新增 |
+| 7 | `a.on("pointerdown",()=>{...setCursor(A),toggleOptionState(A),playSelect()})` | OPTION_SELECT | 选项开关 | `{kind:"cursor",then:SUBMIT}` | `src/ui/settings/option-select-ui-handler.ts` | 🔴 新增 |
+| 8 | `A.on("pointerdown",()=>{i()&&s(a)})` | 设置下拉 | 下拉项 | `{kind:"custom"}` | `src/ui/containers/dropdown.ts` | 🔴 新增 |
+| 9 | `A.on("pointerdown",()=>this.onSessionSlotPointer(s))` | SAVE_SLOT | 存档槽 | `{kind:"cursor"}` | `src/ui/handlers/save-slot-select-ui-handler.ts` | 🔴 新增 |
+| 10 | `se.on("pointerdown",(We,Ve,qe)=>{this.onStarterGridPointer(...)})` | STARTER_SELECT | 网格选人 | `{kind:"cursor",index}` | `src/ui/handlers/starter-select-ui-handler.ts` | 🔴 新增 |
+| 11 | `qe.on("pointerdown",()=>this.onTeamSlotPointer(We))` | STARTER_SELECT | 队伍槽 | `{kind:"cursor",index}` | `src/ui/handlers/starter-select-ui-handler.ts` | 🔴 新增 |
+| 12 | `Pe.on("pointerdown",()=>{...V.POKEDEX&&processInput(w.CANCEL)})` | POKEDEX | 返回 | `{kind:"button",button:CANCEL}` | `src/ui/handlers/pokedex-ui-handler.ts` | 🔴 新增 |
+| 13 | `d.on("pointerdown",()=>{...V.POKEDEX_PAGE&&processInput(w.CANCEL)})` | POKEDEX_PAGE | 返回 | `{kind:"button",button:CANCEL}` | `src/ui/handlers/pokedex-page-ui-handler.ts` | 🔴 新增 |
+| 14 | `f.on("pointerdown",()=>this.onMenuRowPointer(D))` | MENU | 菜单行 | `{kind:"cursor"}` | `src/ui/handlers/menu-ui-handler.ts` | 🔴 新增 |
+| 15 | `A.on("pointerdown",()=>{...buttonActions[A]()})` | 提示弹窗 | 模态按钮 | `{kind:"custom"}` | `src/ui/handlers/modal-ui-handler.ts:138` | ✅ 已有 |
+| 16 | `Pe.on("pointerdown",()=>{...processInput(w.CANCEL)})`（图鉴内） | POKEDEX | 返回 | `{kind:"button",button:CANCEL}` | `src/ui/handlers/pokedex-ui-handler.ts` | 🔴 新增 |
+| 17 | `this.hit.on("pointerdown",O)` | 通用按钮组件 | 组件回调 | `{kind:"custom"}` | `src/ui/handlers/modal-ui-handler.ts`（modal 共用） | ✅ 已有 |
+| 18 | `r.on("pointerdown",()=>{const r=...discord oauth...})` | LOGIN_FORM | 下载存档/Discord | `{kind:"custom"}` | `src/ui/handlers/login-register-info-container-ui-handler.ts:104/108/112` | ✅ 已有 |
 
-### 2.2 🔴 改版新增（20 处，A2 重点）
+> **另 4 处上游已有但产物未单列**：`admin-ui-handler.ts:210`（管理员按钮）、`oauth-providers-ui-handler.ts:94/104`（OAuth 图标）、`form-modal-ui-handler.ts:137/144`（表单确认）。产物中存在对应绑定（管理员/登录界面），已在 §2.3 说明。
 
-| # | 产物位置 | 场景（UiMode） | 触发行为 | 建议 ActionSpec |
-|---|---|---|---|---|
-| 19 | `this.eryouExitZone.on("pointerdown",()=>{...closeEryouProgression()})` | ERYOU_* | 退出二游 | `{kind:"custom",fn:"eryou.exit"}` |
-| 20 | `this.startHitZone.on("pointerdown",()=>this.onStartButtonPointer())` | STARTER_SELECT | 开始 | `{kind:"custom"}` |
-| 21 | `this.eryouSearchZone.on("pointerdown",()=>{...openEryouSearch()})` | STARTER_SELECT | 二游搜索 | `{kind:"custom",fn:"eryou.search"}` |
-| 22 | `this.ptSortButton.on("pointerdown",()=>this.cyclePtSort())` | PT_CONSTELLATION | PT 排序 | `{kind:"custom"}` |
-| 23 | `a.on("pointerdown",()=>{this.pointerReady()&&this.close()})` | TALENT_* | 关闭 | `{kind:"button",button:CANCEL}` |
-| 24 | `O.on("pointerdown",()=>this.toggleSkillView())` | TALENT_VIEWER | 切换技能视图 | `{kind:"custom"}` |
-| 25 | `T.on("pointerdown",()=>this.onSkillRowPointer(S))` | TALENT_* | 技能行 | `{kind:"cursor"}` |
-| 26 | `h.on("pointerdown",()=>this.onStarPointer(S))` | TALENT_*（命座） | 星点 | `{kind:"cursor"}` |
-| 27 | `T.on("pointerdown",()=>{pointReady()&&cycleBranch(S)&&playSelect()})` | TALENT_* | 分支循环 | `{kind:"custom"}` |
-| 28 | `T.on("pointerdown",()=>this.onChoicePointer(I))` | TALENT_* | 选项 | `{kind:"cursor"}` |
-| 29 | `C.on("pointerdown",()=>this.onRowPointer(T))` | JIEMING | 行选择 | `{kind:"cursor"}` |
-| 30 | `a.on("pointerdown",()=>{...state切换/refresh()})` | ERYOU_HELD_ITEM | 状态切换 | `{kind:"custom"}` |
-| 31 | `I.on("pointerdown",()=>{...listCursor--;refresh()})` | ERYOU_* | 列表上翻 | `{kind:"scroll",delta:-1}` |
-| 32 | `S.on("pointerdown",()=>{...listCursor++;refresh()})` | ERYOU_* | 列表下翻 | `{kind:"scroll",delta:+1}` |
-| 33 | `L.on("pointerdown",()=>{...})` | ERYOU_* | 行激活 | `{kind:"cursor"}` |
-| 34 | `r.on("pointerdown",()=>{pointerReady()&&a&&A()})` | ERYOU_* | 动作行 | `{kind:"custom"}` |
-| 35 | `L.on("pointerdown",()=>this.isOpen()&&this.cycleMaterial(-1))` | ERYOU_SYNTHESIS | 材料 -1 | `{kind:"custom"}` |
-| 36 | `h.on("pointerdown",()=>this.isOpen()&&this.cycleMaterial(1))` | ERYOU_SYNTHESIS | 材料 +1 | `{kind:"custom"}` |
-| 37 | `A.on("pointerdown",()=>{isOpen()&&closeTeamPrompt()})` | ERYOU_* | 关闭提示 | `{kind:"button",button:CANCEL}` |
-| 38 | `h.on("pointerdown",()=>{isOpen()&&pointerGuard.pass()&&...取回})` | ERYOU_* | 取回槽位 | `{kind:"custom"}` |
+### 2.2 🔴 改版新增（20 处，A2/A3 重点）
+
+| # | 产物位置 | 场景（UiMode） | 触发行为 | 建议 ActionSpec | 上游文件 | 上游/新增 |
+|---|---|---|---|---|---|---|
+| 19 | `this.eryouExitZone.on("pointerdown",()=>{...closeEryouProgression()})` | ERYOU_* | 退出二游 | `{kind:"custom",fn:"eryou.exit"}` | **无（上游无 ERYOU）** | 🔴 新增 |
+| 20 | `this.startHitZone.on("pointerdown",()=>this.onStartButtonPointer())` | STARTER_SELECT | 开始 | `{kind:"custom"}` | `src/ui/handlers/starter-select-ui-handler.ts`（改造） | 🔴 新增 |
+| 21 | `this.eryouSearchZone.on("pointerdown",()=>{...openEryouSearch()})` | STARTER_SELECT | 二游搜索 | `{kind:"custom",fn:"eryou.search"}` | **无（上游无 ERYOU）** | 🔴 新增 |
+| 22 | `this.ptSortButton.on("pointerdown",()=>this.cyclePtSort())` | PT_CONSTELLATION | PT 排序 | `{kind:"custom"}` | **无（上游无 PT）** | 🔴 新增 |
+| 23 | `a.on("pointerdown",()=>{this.pointerReady()&&this.close()})` | TALENT_* | 关闭 | `{kind:"button",button:CANCEL}` | **无（上游无 TALENT）** | 🔴 新增 |
+| 24 | `O.on("pointerdown",()=>this.toggleSkillView())` | TALENT_VIEWER | 切换技能视图 | `{kind:"custom"}` | **无** | 🔴 新增 |
+| 25 | `T.on("pointerdown",()=>this.onSkillRowPointer(S))` | TALENT_* | 技能行 | `{kind:"cursor"}` | **无** | 🔴 新增 |
+| 26 | `h.on("pointerdown",()=>this.onStarPointer(S))` | TALENT_*（命座） | 星点 | `{kind:"cursor"}` | **无** | 🔴 新增 |
+| 27 | `T.on("pointerdown",()=>{pointerReady()&&cycleBranch(S)&&playSelect()})` | TALENT_* | 分支循环 | `{kind:"custom"}` | **无** | 🔴 新增 |
+| 28 | `T.on("pointerdown",()=>this.onChoicePointer(I))` | TALENT_* | 选项 | `{kind:"cursor"}` | **无** | 🔴 新增 |
+| 29 | `C.on("pointerdown",()=>this.onRowPointer(T))` | JIEMING | 行选择 | `{kind:"cursor"}` | **无（上游无 JIEMING）** | 🔴 新增 |
+| 30 | `a.on("pointerdown",()=>{...state切换/refresh()})` | ERYOU_HELD_ITEM | 状态切换 | `{kind:"custom"}` | **无** | 🔴 新增 |
+| 31 | `I.on("pointerdown",()=>{...listCursor--;refresh()})` | ERYOU_* | 列表上翻 | `{kind:"scroll",delta:-1}` | **无** | 🔴 新增 |
+| 32 | `S.on("pointerdown",()=>{...listCursor++;refresh()})` | ERYOU_* | 列表下翻 | `{kind:"scroll",delta:+1}` | **无** | 🔴 新增 |
+| 33 | `L.on("pointerdown",()=>{...})` | ERYOU_* | 行激活 | `{kind:"cursor"}` | **无** | 🔴 新增 |
+| 34 | `r.on("pointerdown",()=>{pointerReady()&&a&&A()})` | ERYOU_* | 动作行 | `{kind:"custom"}` | **无** | 🔴 新增 |
+| 35 | `L.on("pointerdown",()=>this.isOpen()&&this.cycleMaterial(-1))` | ERYOU_SYNTHESIS | 材料 -1 | `{kind:"custom"}` | **无** | 🔴 新增 |
+| 36 | `h.on("pointerdown",()=>this.isOpen()&&this.cycleMaterial(1))` | ERYOU_SYNTHESIS | 材料 +1 | `{kind:"custom"}` | **无** | 🔴 新增 |
+| 37 | `A.on("pointerdown",()=>{isOpen()&&closeTeamPrompt()})` | ERYOU_* | 关闭提示 | `{kind:"button",button:CANCEL}` | **无** | 🔴 新增 |
+| 38 | `h.on("pointerdown",()=>{isOpen()&&pointerGuard.pass()&&...取回})` | ERYOU_* | 取回槽位 | `{kind:"custom"}` | **无** | 🔴 新增 |
+
+> **注**：本表「上游文件」列的路径已按上游 V1.11.22 目录规范（`src/ui/handlers/*.ts`、`src/ui/containers/*.ts`、`src/ui/settings/*.ts`）对齐。
+> 产物中的 `TALENT_*` / `ERYOU_*` / `JIEMING` / `PT_*` / `SUPER_BACKPACK` handler **上游完全不存在**，A3 迁移需**新建文件**（非改上游）。
 
 ### 2.3 全局监听（17 处，非独立交互点）
 
-| # | 位置 | 用途 | 备注 |
-|---|---|---|---|
-| — | `E.input.on("pointerdown",A=>this.startDrag(A))` | 背包拖拽起点 | `Drag` 类 |
-| — | `E.input.on("pointerdown",this.onDragStart,this)` | 第二处拖拽（`startDrag` 变体） | — |
-| — | `E.input.on("pointermove",this.onDragMove,this)` ×2 | 拖拽移动 | — |
-| — | `E.input.on("pointerup",this.onDragEnd,this)` ×2 | 拖拽结束 | — |
-| — | `E.input.on("pointerupoutside",this.onDragEnd,this)` ×2 | 拖拽兜底 | ✅ 有双保险 |
-| — | `E.input.on("pointerdown",this.onSwipeStart,this)` ×3 | 滑动关闭（改版 3 系统） | 恒判 `wasTouch` |
-| — | `E.input.on("pointerup",this.onSwipeEnd,this)` ×3 | 滑动关闭 | 同上 |
+| # | 位置 | 用途 | 上游对应 | 上游/新增 |
+|---|---|---|---|---|
+| 1 | `E.input.on("pointerdown",A=>this.startDrag(A))` | 背包拖拽起点 | 无 | 🔴 新增 |
+| 2 | `E.input.on("pointerdown",this.onDragStart,this)` | 第二处拖拽 | 无 | 🔴 新增 |
+| 3 | `E.input.on("pointermove",this.onDragMove,this)` ×2 | 拖拽移动 | 无 | 🔴 新增 |
+| 4 | `E.input.on("pointerup",this.onDragEnd,this)` ×2 | 拖拽结束 | 无 | 🔴 新增 |
+| 5 | `E.input.on("pointerupoutside",this.onDragEnd,this)` ×2 | 拖拽兜底 | 无 | 🔴 新增 |
+| 6 | `E.input.on("pointerdown",this.onSwipeStart,this)` ×3 | 滑动关闭（改版 3 系统） | 无 | 🔴 新增 |
+| 7 | `E.input.on("pointerup",this.onSwipeEnd,this)` ×3 | 滑动关闭 | 无 | 🔴 新增 |
+| 8 | `E.input.on("pointerdown",this.onPointerDown,this)` | 改版弹窗 | 无 | 🔴 新增 |
+| 9 | `E.input.on("pointerup",this.onPointerUp,this)` | 改版弹窗 | 无 | 🔴 新增 |
+| 10 | **`E.input.on("pointerupoutside")` 缺 1 处** | 弹窗类未绑兜底 | — | ⚠️ 缺陷 |
+
+### 2.4 上游已有但产物中存在的 DOM 级 pointer（补充）
+
+| 产物位置 | 上游文件 | 上游/新增 |
+|---|---|---|
+| 虚拟手柄 `[data-key]` 按钮 | `src/touch-controls.ts:74/99` | ⚠️ **上游有，本地被魔改移除**（见 20 号文档 F-2） |
+| 管理员 Link/Unlink | `src/ui/handlers/admin-ui-handler.ts:210` | ✅ 已有 |
+| 登录界面 用户名/存档/语言 | `src/ui/handlers/login-register-info-container-ui-handler.ts:104/108/112` | ✅ 已有 |
+| OAuth 图标 | `src/ui/handlers/oauth-providers-ui-handler.ts:94/104` | ✅ 已有 |
+| 表单模态确认 | `src/ui/handlers/form-modal-ui-handler.ts:137/144` | ✅ 已有 |
 | — | `E.input.on("pointerdown",this.onPointerDown,this)` | 改版弹窗 | — |
 | — | `E.input.on("pointerup",this.onPointerUp,this)` | 改版弹窗 | — |
 | — | **`E.input.on("pointerupoutside")` 缺 1 处** | 弹窗类未绑兜底 | ⚠️ 拖拽态可能卡住 |
@@ -235,66 +278,67 @@ TALENT_CODEX  TALENT_SHOP  TALENT_VIEWER
 
 ## 六、F-2 上游交互层调研结论（关键！）
 
-> **调研方式**：上游 clone 未完成（BLOCK-3），改用 **GitHub 在线读取 beta 分支源码**。
+> **调研方式**：~~上游 clone 未完成（BLOCK-3），改用 GitHub 在线读取 beta 分支源码。~~
+> **🔴 2026-10-14 更新**：本地已有上游**锁定版本源码树**（V1.11.22 / `90df65097b6d`），
+> 结论已用**确切版本源码**复核（不再是 beta 在线版本）。详见 `20-F2-TouchControl版本复核报告.md`。
 
-### 6.1 交互层架构（已确认）
+### 6.1 交互层架构（已确认，基准 = V1.11.22）
 
 | 问题 | 答案 | 证据 |
 |---|---|---|
-| 交互总入口 | `src/ui-inputs.ts` → `UiInputs` 类，`listenInputs()` 监听 `input_down`/`input_up` | 已读取 |
+| 交互总入口 | `src/ui-inputs.ts` → `UiInputs` 类，`listenInputs()` 监听 `input_down`/`input_up` | ✅ 已读锁定版本源码 |
 | 设备判定 | `detectInputMethod(evt)`：`controller_type` = `keyboard` / `gamepad`，键盘下按 `evt.isTouch` 再分 `touch`/`keyboard` | ✅ 与产物一致 |
-| **鼠标是独立输入法吗？** | ❌ **不是**。**没有 `"mouse"` 这个 `inputMethod`** | ✅ 实测 `"mouse"` 在产物中 **0 次** |
-| 键位映射 | `src/inputs-controller.ts` → `InputsController`，`deviceMapping` / `getButtonWithKeycode` | 已读取 |
-| 触摸/鼠标按键 | `src/touch-controls.ts` → `TouchControl.bindKey()` | 已读取 |
+| **鼠标是独立输入法吗？** | ❌ **不是**。**没有 `"mouse"` 这个 `inputMethod`** | ✅ 产物 + 上游均 0 次 |
+| 键位映射 | `src/inputs-controller.ts` → `InputsController`，`deviceMapping` / `getButtonWithKeycode` | ✅ 已读 |
+| 触摸/鼠标按键 | `src/touch-controls.ts` → `TouchControl.bindKey()` | ✅ 已读（**上游含 pointer，本地被移除**） |
 
-### 6.2 🔑 关键问题：上游原版有鼠标支持吗？
+### 6.2 🔑 关键问题：上游原版有 canvas 层鼠标支持吗？
 
-**有，但只有一个通道：虚拟手柄 DOM 按钮。**
+**几乎没有。上游 canvas 层 pointerdown 只存在于 6 个边缘界面文件**（见 §二之零）：
+模态按钮 / 表单模态 / 登录注册信息 / OAuth / 管理员 / 虚拟手柄拖拽。
 
-```ts
-// src/touch-controls.ts（上游 beta, 2026-08）
-bindKey(node: HTMLElement, key: string) {
-  node.addEventListener("touchstart", ...);
-  node.addEventListener("pointerdown", event => { ... });  // ← 鼠标也能触发
-  node.addEventListener("pointerup", event => { ... });
-}
-```
+**核心业务界面（队伍/背包/图鉴/选人/摘要/菜单/战斗指令）—— 上游一行 pointerdown 都没有。**
 
-**但**：
-1. 这个 `pointerdown` 只覆盖 `index.html` 里 19 个 `data-key` 按钮（方向键 / A / B / Menu / C / F / R / G / E / N / V / Y）。
-2. **canvas 内的 UI（队伍、背包、招式列表等）上游完全没有任何 pointerdown** → 这些是**改版自己外挂的**（§2.2 的 20 处 + §2.1 部分）。
-3. `TouchControl.render()` 里有 `if (!hasTouchscreen() || !settings.general.enableTouchControls) return;` → **桌面端默认不渲染手柄**。
-
-### 6.3 对 S6 的结论（重要）
+### 6.3 对 S6 的结论（2026-10-14 修正版）
 
 | 判断 | 结论 |
 |---|---|
-| 上游是否有 canvas 层鼠标交互？ | ❌ **没有**。canvas UI 的鼠标支持**必须我们做** |
-| 上游虚拟手柄是否已支持鼠标？ | ✅ **已支持**（`pointerdown`/`pointerup`），本地版本较旧可能没有 |
-| S6 工作量 | **中间态**：不是"从零写一层"，也**不能直接用上游**。= **上游可复用部分**（`TouchControl.bindKey` 的 pointer 绑定 + `hasTouchscreen` 判定）+ **自写 canvas 交互层**（针对全部 `UiMode` 场景 + 18 个改版模式） |
-| `inputMethod` 是否需要新增 `"mouse"`？ | **建议新增**（v1 已设计），但需注意上游 `detectInputMethod` 只认 `controller_type`，新增要走"扩展"而非"替换" |
-| 是否要改上游 `TouchControl`？ | 若本地版本已含 `pointerdown` 绑定 → **不改**；否则迁上游实现 |
+| 上游是否有 canvas 层鼠标交互（业务界面）？ | ❌ **没有**。**必须我们做**（38 处中约 34 处是改版外挂） |
+| 上游虚拟手柄是否已支持鼠标？ | ✅ **V1.11.22 已支持**（`pointerdown`/`pointerup` + `skipPointer*`）；**本地被魔改移除** |
+| 虚拟手柄部分要不要重写？ | ❌ **不用**。源码级恢复 UP-0610 的 `bindKey` 即可（**工时≈0**） |
+| S6 工作量 | **主体在 canvas 交互层**（12 场景 + 18 改版模式）；虚拟手柄部分**净减** |
+| `inputMethod` 新增 `"mouse"`？ | 建议新增，但上游 `detectInputMethod` 只认 `controller_type` → 走**扩展**而非替换 |
 
-**⚠️ 待 A0 完成后必须复核**：本地产物的 `TouchControl` 对应上游哪个 commit（决定"迁上游"还是"自己补"）。
+**✅ 已复核完成**：本地产物 `TouchControl` 基于 **V1.11.22 源码 + 魔改者回退 `bindKey`**（不是"不可定位"）。
+详见 `20-F2-TouchControl版本复核报告.md`。
 
 ---
 
-## 七、给全栈 A2 的输入摘要
+## 七、给全栈 A2/A3 的输入摘要
 
 ```
-【A2 输入 · 前端 F-1 供料】
-1. canvas 层交互点：38 处（18 上游原有 + 20 改版新增）
-2. 全局监听：17 处（拖拽 5 组 / 滑动 3 组 / 弹窗 2 组）
-3. 改版新增系统（全部需 A2 标注为"上游无"）：
-   - 二游 ERYOU_*（11 个模式，pointerdown ≈ 12 处）
-   - 天赋/命座 TALENT_*（3 个模式，≈ 6 处）
-   - 解明 JIEMING（1 个模式，≈ 2 处）
-   - PT PT_CONSTELLATION/PT_SOUDACHE_START（≈ 1 处）
-4. UiMode 改版新增 18 个（见 §五，可直接用于"上游无 → 魔改新增"识别）
-5. 配套机制：pointerReady ×3 变体、bindWheel ×1（无节流）、swipe ×3 组（硬判 wasTouch）
-6. 🔴 上游 beta（2026-08）已有 touch-controls 的 pointerdown 绑定，
-   本地产物缺 skipPointerDown/preventDoubleTapZoom → 本地对应上游更早的 commit
-7. ⚠️ 上游 canvas UI 完全无 pointerdown → canvas 交互层 100% 是改版外挂
+【A2/A3 输入 · 前端 F-1 供料（2026-10-14 回填完成）】
+
+■ 上游基线：V1.11.22（90df65097b6d），本地源码树 .build-tools/tarball-src/...
+
+■ 上游 canvas pointerdown 全部落点：仅 6 个文件
+    touch-controls.ts:74/99            （虚拟手柄，本地被移除）
+    modal-ui-handler.ts:138            （模态按钮）
+    admin-ui-handler.ts:210            （管理员 Link/Unlink）
+    login-register-info-container-ui-handler.ts:104/108/112
+    form-modal-ui-handler.ts:137/144
+    oauth-providers-ui-handler.ts:94/104
+    move-touch-controls-handler.ts:307 （DOM 拖拽）
+
+■ 改版新增 canvas 交互点：38 处中约 34 处（上游无）
+    - PARTY / FIGHT / SUMMARY / MENU / POKEDEX / POKEDEX_PAGE / SAVE_SLOT
+      / STARTER_SELECT / OPTION_SELECT / 设置下拉 → 上游文件存在但【无 pointerdown】→ 改造
+    - SUPER_BACKPACK / TALENT_* / JIEMING / ERYOU_* / PT_* → 上游文件【不存在】→ 新建
+■ 全局监听：17 处（拖拽 5 组 / 滑动 3 组 / 弹窗 2 组）—— 全部改版新增
+■ UiMode 改版新增 18 个（见 §五，可直接用于"上游无 → 魔改新增"识别）
+■ 配套机制：pointerReady ×3 变体、bindWheel ×1（无节流）、swipe ×3 组（硬判 wasTouch）
+■ 🔴 A3 迁移提示：TALENT/ERYOU/JIEMING/PT/SuperBackpack 的 handler 需【新建文件】，
+   路径建议 src/ui/handlers/<name>-ui-handler.ts，与上游目录规范对齐
 ```
 
 ---
@@ -303,12 +347,13 @@ bindKey(node: HTMLElement, key: string) {
 
 | 项 | 依赖 | 状态 |
 |---|---|---|
-| 回填"上游文件"列 | 全栈 A0-2（锁定 commit）+ A0 clone 完成 | ⏳ |
-| 复核本地 `TouchControl` 对应 commit | A0-2 | ⏳ |
-| 38 处交互点的取舍（保留/迁移/重写） | 本表 + A2 结论 | ⏳ |
+| 回填"上游文件"列 | 上游源码树 | ✅ **已完成（2026-10-14）** |
+| 复核本地 `TouchControl` 对应版本 | 上游源码树 | ✅ **已完成**（见 20 号文档） |
+| 38 处交互点的取舍（保留/迁移/重写） | 本表 + A3 结论 | ⏳ 待 A3 |
+| 12 场景函数级矩阵（F-4） | 本表 | ⏳ 进行中 |
 | S6 交互层实现 | M5（A5） | 🔒 阻塞 |
 
 ---
 
 > **说明**：本表是"清点 + 分类 + 语义建议"，**不是实现**。实现待 M5 后（v2 看板 S6-*）。
-> **时效**：基于 2026-10-13 实测产物；上游依据 beta 分支 2026-08 状态。
+> **时效**：产物实测 2026-10-13；上游文件列回填 2026-10-14，基准 V1.11.22（`90df65097b6d`）。
