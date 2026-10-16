@@ -1,8 +1,12 @@
 # tools/input-layer —— 前端 S6 输入层纯逻辑工具集
 
 > **归属**：前端工程师
-> **性质**：v2 看板 **F-3（P2）** 的交付物 + F-1 的配套扫描脚本
-> **状态**：纯逻辑部分**已完成并通过 38 项单测**（不依赖 Phaser / 上游 / 产物）
+> **性质**：v2 看板 **F-3（P2）** 的交付物 + F-1 的配套扫描脚本 + **F-6（TS 化）** 的暂存与验收工具
+> **状态**：
+> - 纯逻辑（`.js` 原型）**已完成并通过 69 项单测**（38 gesture + 31 arbiter）
+> - **F-6**：已产出 `.ts` 形态并**验收通过**（类型 0 错误 + 69/69 同构迁移），落在
+>   `docs/sourcemigration/A3-migration/src/input/`（待 A4-00 接入锚点树 `src/input/`）
+> - **F-8**：13 个场景适配器桩已产出，**tsc 0 错误**
 
 ---
 
@@ -26,15 +30,34 @@ v2 方案（`05-v2-任务看板.md` §七）已把 v1 的 `pkrc/**` 外置 ESM �
 |---|---|---|
 | `gesture-resolver.js` | 手势判定纯逻辑（点击/拖拽/长按/滚轮归一/节流） | ✅ 完成 |
 | `gesture-resolver.test.js` | 38 项单元测试（无第三方依赖） | ✅ 38/38 通过 |
-| `run-tests.js` | 测试入口 | ✅ |
+| `input-arbiter.js` | 键鼠仲裁纯逻辑（设备标记 / 同帧去重 / 切换冷却） | ✅ 完成 |
+| `input-arbiter.test.js` | 31 项单元测试（无第三方依赖） | ✅ 31/31 通过 |
+| `run-tests.js` | 测试入口（JS 原型，无依赖） | ✅ |
+| **`verify-ts.mjs`** | **F-6/F-8 验收**：TS 类型检查 + 69 项同构迁移（进程内，无依赖） | ✅ 通过 |
+
+### TS 形态产物（F-6 / F-8，落在迁移暂存区）
+
+> 目标位置 `src/input/`；暂存于 `docs/sourcemigration/A3-migration/src/input/`（待 A4-00 接入锚点）。
+
+| 文件 | 作用 | 状态 |
+|---|---|---|
+| `gesture-resolver.ts` | 手势判定纯逻辑（TS 化，零逻辑改动） | ✅ 类型 0 错 |
+| `input-arbiter.ts` | 键鼠仲裁纯逻辑（TS 化，零逻辑改动） | ✅ 类型 0 错 |
+| `types.ts` | 输入层共享契约（HitBox / ActionSpec / SceneAdapter） | ✅ |
+| `scene-adapters/*.ts` | 13 个场景适配器桩（12 核心 + 1 上游复用） | ✅ tsc 0 错 |
+| `__tests__/*.test.ts` | 69 项断言（同构迁移） | ✅ 69/69 |
 
 ---
 
 ## 三、运行测试
 
 ```bash
-# 用系统 Node 22（不要用 shared/runtime 的 v16）
+# ① JS 原型（无依赖，A0 未完成时也可跑）
 node tools/input-layer/run-tests.js
+
+# ② F-6/F-8 验收：TS 类型检查 + 69 项同构迁移 + 13 个适配器 tsc
+#    （用系统 Node 22；工具链取自锚点树 node_modules，无需 pnpm）
+node tools/input-layer/verify-ts.mjs
 ```
 
 或直接单个套件：
@@ -104,9 +127,11 @@ import {
 
 ## 七、待办（依赖 M5）
 
-| 项 | 依赖 |
-|---|---|
-| 迁移为 `src/input/gesture-resolver.ts` | M5 |
-| 测试改 vitest | M5 |
-| 接入 `input-arbiter` 的 frameId 去重单测 | F-3 续 |
-| `TouchControl` 迁移评估（上游已有 pointerdown） | A0-2 |
+| 项 | 依赖 | 状态 |
+|---|---|---|
+| 迁移为 `src/input/gesture-resolver.ts` | M5 | ✅ **F-6 已产出**（待 A4-00 接入） |
+| `input-arbiter` 帧去重 + 单测 | F-3 续 | ✅ **F-6 已产出（31 项）** |
+| 12 场景适配器桩 | F-8 | ✅ **F-8 已产出（13 个，tsc 0 错）** |
+| 测试改 vitest | M5 | ⏳ 待 M5（现为无依赖 runner，断言可直接搬运） |
+| `TouchControl` 迁移评估 | A0-2 | ✅ **F-2 已完成**（恢复上游 `bindKey` 即可） |
+| `pointer-manager` / `legacy-bridge` / `interaction-registry` 实现 | M5（S6-1/S6-2/S6-4） | 🔒 阻塞 |
