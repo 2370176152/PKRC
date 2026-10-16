@@ -1,0 +1,159 @@
+{
+  "$schema": "pkrc-phase-archive/v1",
+  "phase": {
+    "id": "phase-3",
+    "name": "接入锚点与等价性收口",
+    "status": "partially_closed",
+    "closed_at": "2026-10-16",
+    "started_at": "2026-10-15",
+    "planned_window": { "start": "2026-10-15", "end": "2026-10-28" },
+    "objective": "把迁移文件真正并入可构建的源码树（接入锚点），并在原生工具链下验证结构等价",
+    "exit_criteria": { "total": 7, "fully_met": 4, "partial": 2, "not_met": 1 },
+    "tasks": { "total": 23, "delivered": 17 }
+  },
+  "git": {
+    "repo": "D:/Work/Pokemon/new",
+    "remote": "https://github.com/2370176152/PKRC.git",
+    "branch": "sourcemigration",
+    "head": "5af8e2f",
+    "total_commits": 35,
+    "phase_commits": 10,
+    "remote_pushed": "55c261f",
+    "ahead_of_remote": 11,
+    "working_tree": "clean",
+    "diff_stat": "74 files changed, 12247 insertions(+), 15870 deletions(-)",
+    "pre_archive_commits": 7,
+    "commits": [
+      { "order": 26, "sha": "8a1c71b", "message": "B-5: 环境修复完成（关键路径首环）— 全仓 tsc 7→0，原生构建 EXIT=0", "files": 2 },
+      { "order": 27, "sha": "b0a00c3", "message": "B-6: 离线构建环境快照 + 零依赖校验器", "files": 3 },
+      { "order": 28, "sha": "aeb6be8", "message": "B-8: 签名比对工具化（供 A4-00b 一键复测）+ 基线报告", "files": 3 },
+      { "order": 29, "sha": "f9fbb3d", "message": "chore(gitignore): 补 2 类忽略规则 —— A5-01 切换备份 + 临时调试产物", "files": 1 },
+      { "order": 30, "sha": "f625c40", "message": "docs(sourcemigration): A0 复核与 ERYOU 符号消解 + A3 勘误 E5~E14", "files": 3 },
+      { "order": 31, "sha": "b34752c", "message": "feat(sourcemigration): A4-P1 依赖清单 + A4-00 接入锚点 22/22（含 3 份前置台账）", "files": 6 },
+      { "order": 32, "sha": "0a439e2", "message": "docs(sourcemigration): A4-00b 签名复测（五分类）+ A4 阶段总结 + A5 交接文档", "files": 5 },
+      { "order": 33, "sha": "26f8e79", "message": "chore(game): A5-01 产物切换 —— modder 产物 → 自构建产物", "files": 20 },
+      { "order": 34, "sha": "758a506", "message": "feat(input-layer): 前端 F-6~F-9 交付 —— TS 化 + 13 场景桩 + 缺口承接方案 + 接入点确认", "files": 24 },
+      { "order": 35, "sha": "5af8e2f", "message": "docs(ui): UI U-5~U-8 交付（4/4）+ 第三阶段派单更新（O-7/O-8 决议）", "files": 8 }
+    ]
+  },
+  "key_metrics": {
+    "tsc_errors": { "before": 7, "after": 0 },
+    "anchor_tree_systems": { "files": 26, "lines": 19932 },
+    "files_anchored": { "done": 22, "total": 22 },
+    "todo_anchor_markers": { "before": 113, "after": 0 },
+    "signature_coverage": {
+      "a3_13_degraded_env": 58.51,
+      "b8_baseline_native": 61.95,
+      "a4_00_done": 65.63,
+      "a5_current": 67.78,
+      "delta_pt": 5.83,
+      "hits_before": 1936,
+      "hits_after": 2118,
+      "core_upstream_symbols": "11/11"
+    },
+    "a3_actual_completeness": {
+      "cjk_anchor_coverage_pct": 58.41,
+      "symbol_coverage_pct": 57.3,
+      "method": "两套独立方法互证"
+    },
+    "residual_five_class": {
+      "dependency_noise": 51,
+      "legacy_tree_classes_not_migrated": 574,
+      "mod_newly_added_unmigrated": 67,
+      "mod_newly_added_migrated": 40,
+      "upstream_patch_hosts": 32,
+      "upstream_patch_migrated": 12,
+      "pending_manual": 17
+    }
+  },
+  "deliverables": [
+    { "id": "B-5", "owner": "后端", "task": "环境修复（关键路径首环）", "status": "done", "evidence": "全仓 tsc 7→0 错；原生 vite build EXIT=0" },
+    { "id": "B-6", "owner": "后端", "task": "离线构建环境快照", "path": "docs/sourcemigration/构建环境快照.json", "status": "done" },
+    { "id": "B-8", "owner": "后端", "task": "签名比对工具化", "path": "tools/verify-signature.cjs", "status": "done", "evidence": "13s 一键复测 + 基线报告" },
+    { "id": "B-7", "owner": "后端", "task": "发布脚本实现", "status": "not_started", "carry_to": "phase-4" },
+
+    { "id": "A4-P1", "owner": "全栈", "task": "依赖清单与接入顺序", "path": "docs/sourcemigration/A4-P1-依赖清单与接入顺序.md", "lines": 195, "status": "done" },
+    { "id": "A4-00", "owner": "全栈", "task": "接入锚点 22/22", "path": "docs/sourcemigration/A4-00-接入锚点进度.md", "status": "done", "evidence": "5/5 验收项通过" },
+    { "id": "A4-00b", "owner": "全栈", "task": "签名复测（五分类）", "path": "docs/sourcemigration/A4-00b-签名复测报告.md", "status": "partial", "note": "(d1) 12/32 未归零 → M3 硬卡点未通过" },
+    { "id": "A4-01", "owner": "全栈", "task": "11 系统走查（不抽样）", "status": "not_started", "blocker": "需 GUI 环境", "carry_to": "phase-4" },
+    { "id": "A4-02", "owner": "全栈", "task": "7 条补丁三栏对照", "path": "docs/sourcemigration/A4-阶段总结.md", "status": "done", "evidence": "7/7 齐备" },
+    { "id": "A4-03", "owner": "全栈", "task": ".prsv 存档往返", "status": "not_started", "blocker": "团队判断为需 GUI（实际可用 Node 沙盒）", "carry_to": "phase-4" },
+    { "id": "A4-04", "owner": "全栈", "task": "全流程 + 键盘回归", "status": "not_started", "blocker": "需 GUI 环境", "carry_to": "phase-4" },
+    { "id": "A5-01", "owner": "全栈", "task": "产物切换", "path": "docs/sourcemigration/A5-交接文档.md", "status": "done_with_deviation", "note": "⚠️ 抢跑：M3 未过、M4 未验证即执行" },
+    { "id": "A5-02", "owner": "全栈", "task": "共用回归清单", "status": "not_started", "carry_to": "phase-4" },
+    { "id": "A5-03", "owner": "全栈", "task": "底座交接文档", "path": "docs/sourcemigration/A5-交接文档.md", "lines": 165, "status": "done" },
+
+    { "id": "A4-00-pre-1", "owner": "全栈", "task": "A3 归属遗漏清单", "path": "docs/sourcemigration/A4-00-前置-A3归属遗漏清单.md", "status": "done", "evidence": "实测 A3 完成度 ~58%" },
+    { "id": "A4-00-pre-2", "owner": "全栈", "task": "旧树 API 差异台账", "path": "docs/sourcemigration/A4-00-旧树API差异台账.md", "status": "done" },
+    { "id": "A4-00-pre-3", "owner": "全栈", "task": "misc-legacy 接入方案", "path": "docs/sourcemigration/A4-00-前置-misc-legacy接入方案.md", "status": "done" },
+    { "id": "A3-bu", "owner": "全栈", "task": "未迁符号清单（67 项）", "path": "docs/sourcemigration/A3-补-未迁符号清单.md", "status": "done" },
+    { "id": "A0-recheck", "owner": "全栈", "task": "A0 复核与 ERYOU 符号消解", "path": "docs/sourcemigration/A0-复核与ERYOU符号消解.md", "status": "done" },
+
+    { "id": "F-6", "owner": "前端", "task": "输入层 TS 化", "path": "docs/sourcemigration/A3-migration/src/input/", "status": "done", "evidence": "69 项同构迁移全过；类型完整无 any" },
+    { "id": "F-7", "owner": "前端", "task": "pointer 缺口承接方案", "path": "docs/delegation/23-F7-上游pointer缺口承接方案.md", "status": "done", "evidence": "38 处全有上游文件+接入函数" },
+    { "id": "F-8", "owner": "前端", "task": "13 场景适配器桩", "path": "docs/sourcemigration/A3-migration/src/input/scene-adapters/", "status": "done", "evidence": "tsc 0 错" },
+    { "id": "F-9", "owner": "前端", "task": "inputMethod 接入点确认", "path": "docs/delegation/25-F9-上游inputMethod接入点确认.md", "status": "done" },
+
+    { "id": "U-5", "owner": "UI", "task": "i18n B0 映射", "path": "docs/sourcemigration/i18n-b0/", "status": "done", "evidence": "24 keys + 29 条；七项校验全过；与上游重叠仅 1/24" },
+    { "id": "U-6", "owner": "UI", "task": "Token 适配层设计", "path": "docs/delegation/21-UI-Token适配层设计.md", "status": "done" },
+    { "id": "U-7", "owner": "UI", "task": "上游 UI 组件视觉审计", "path": "docs/delegation/22-UI-上游UI组件视觉审计清单.md", "status": "done" },
+    { "id": "U-8", "owner": "UI", "task": "新增模式界面重构方案", "path": "docs/delegation/23-UI-新增模式界面重构方案.md", "status": "done" }
+  ],
+  "milestones": [
+    { "id": "M1", "name": "可构建的上游", "status": "achieved", "phase": 1 },
+    { "id": "M2", "name": "魔改点清单", "status": "achieved", "phase": 1 },
+    { "id": "M3", "name": "源码含魔改", "status": "hard_gate_failed", "note": "接入锚点✅/build✅/src 0 错✅；但 (d1) 12/32 未归零；按 O-5「先修完才判」不成立" },
+    { "id": "M4", "name": "等价性验证", "status": "not_achieved", "blocker": "A4-01/03/04 待 GUI 环境" },
+    { "id": "M5", "name": "产物切换", "status": "conditionally_achieved", "note": "切换✅ + 交接✅；功能等价未验证；A5-01 抢跑" },
+    { "id": "M6", "name": "输入层完成", "status": "not_started" },
+    { "id": "M7", "name": "视觉完成", "status": "not_started" },
+    { "id": "M8", "name": "发布管线就绪", "status": "not_started" },
+    { "id": "M9", "name": "可发布", "status": "not_started" }
+  ],
+  "owner_decisions": [
+    { "id": "O-5", "date": "2026-10-14", "decision": "M3 必须先修完才能判（不采用挂账口径）", "effect": "A4-00b 升为阶段硬卡点" },
+    { "id": "O-7", "date": "2026-10-14", "decision": "A4-00b 残差口径由三分类扩为五分类（新增「旧树过时类」档）", "effect": "574 个旧树类定性为「不迁」，不再计入迁移缺陷" },
+    { "id": "O-8", "date": "2026-10-16", "decision": "A4-00 口径修正 —— 「可编译」≠「功能等价」", "effect": "明确 A4-00 完成范围，实测完成度 ~58%" }
+  ],
+  "key_findings": [
+    { "id": "METHOD-ENTRY-FIRST", "desc": "A3-补 必须「先接入口，再补叶子」：先补叶子 +0 命中，接上链入口 +29。根因：rolldown 从入口做可达性分析", "severity": "high" },
+    { "id": "COMPILE-NE-FUNCTIONAL", "desc": "「可编译」≠「功能等价」：tsc 0 错 + build EXIT=0，但迁移完成度仅 ~58%", "severity": "high" },
+    { "id": "A3-58PCT", "desc": "A3 迁移完成度实测 ~58%（中文串 58.41% + 符号 57.3%，双方法互证）", "severity": "high" },
+    { "id": "DECLARE-ANY-MASK", "desc": "`declare ... any` 长期掩盖真实类型不匹配；每文件接入成本 ≈ 20~40 个类型错", "severity": "high" },
+    { "id": "RESIDUAL-ILLUSION", "desc": "658 未定性残差中仅 67 项是真·mod 新增；574 为旧树过时类，与迁移无关", "severity": "medium" },
+    { "id": "E13-VARARG", "desc": "变参签名吞多余实参、tsc 不报错（setOverlayMode 3 参被误录成 7 参）", "severity": "medium" },
+    { "id": "E10-SELF-NAME", "desc": "A3 自造名而非 keepNames 真名 ⇒ 缺口清单与产物符号对不上账（9 处）", "severity": "medium" },
+    { "id": "E14-SYMBOL", "desc": "3 个 UI 函数被写成 Symbol.for(...) 占位 —— 实现丢失，调用即失效", "severity": "high" },
+    { "id": "A0-E2", "desc": "推翻「旧 modifier 只是正则看不见」；实为产物基座（旧树）形态 —— 锚点树已重构为声明式", "severity": "medium" },
+    { "id": "A5-SKIP", "desc": "A5-01 抢跑：M3 未过、M4 未验证即切换 dist ⇒ P3-R8 已触发", "severity": "high" },
+    { "id": "GUI-BLOCK", "desc": "A4-01/04 被 GUI 环境卡住；A4-03 被误判为需 GUI（实际可用 Node 沙盒）", "severity": "high" }
+  ],
+  "risks": {
+    "closed": [
+      { "id": "P3-R1", "name": "环境修复失败", "closed_at": "2026-10-15", "evidence": "B-5 完成，tsc 7→0" },
+      { "id": "P3-R2", "name": "接入锚点引发大面积编译错", "closed_at": "2026-10-16", "evidence": "分批接入策略生效，每批 tsc 通过再继续" },
+      { "id": "P3-R5", "name": "切换后不可启动", "closed_at": "2026-10-16", "evidence": "安全性验证 5/5" },
+      { "id": "P3-R7", "name": "M3 判定口径未定", "closed_at": "2026-10-14", "evidence": "O-5 裁定" }
+    ],
+    "open": [
+      { "id": "N-1", "name": "M3 硬卡点未通过（(d1) 12/32）", "level": "high", "owner": "全栈", "carry_to": "phase-4" },
+      { "id": "N-2", "name": "A4-01/04 被 GUI 阻塞", "level": "high", "owner": "前端（建环境）+ 全栈", "carry_to": "phase-4" },
+      { "id": "N-3", "name": "A4-03 存档往返未做", "level": "high", "owner": "全栈", "carry_to": "phase-4" },
+      { "id": "N-4", "name": "A5-01 抢跑需追认或回滚", "level": "high", "owner": "项目所有者", "carry_to": "phase-4" },
+      { "id": "N-5", "name": "A5-02 共用回归未做", "level": "medium", "owner": "全栈", "carry_to": "phase-4" },
+      { "id": "N-6", "name": "dist 资源未补全（audio/anim/fonts/pkrc/images 等仍为 modder 资源）", "level": "medium", "owner": "后端", "carry_to": "phase-4" },
+      { "id": "N-7", "name": "B-7 发布脚本未实现", "level": "medium", "owner": "后端", "carry_to": "phase-4" },
+      { "id": "N-8", "name": "本地领先远程 11 提交", "level": "medium", "owner": "项目所有者", "carry_to": "phase-4" },
+      { "id": "N-9", "name": "mingzuo 美术授权未确认", "level": "low", "owner": "项目所有者", "carry_to": "phase-4" },
+      { "id": "N-10", "name": "前端 U 组补迁未做（constellation 8 + P5X UI 3 + ERYOU 11 Handler）", "level": "medium", "owner": "前端", "carry_to": "phase-4" }
+    ]
+  },
+  "next_phase": {
+    "id": "phase-4",
+    "name": "地基验证收口",
+    "dispatch_doc": "docs/delegation/27-第四阶段任务分发.md",
+    "window": { "start": "2026-10-16", "end": "2026-10-27", "working_days": 8 },
+    "targets": ["M3 判定 @ 2026-10-21", "M4 @ 2026-10-23", "M5 正式 @ 2026-10-27"],
+    "primary_obstacle": "GUI 环境缺失 → 方案：自动化走查环境（headless browser + 存档注入 + 状态断言）"
+  }
+}
