@@ -101,6 +101,19 @@ const UPSTREAM = {
  *    ⇒ 本管线的处置：**默认 prefer = 资产源**（= 保持当前发行版内容不变），
  *      并在 `merge` 时**大声告警**；要改成构建产物必须显式 `--locales-from=build`。
  *      这样 B-9 不会**静默**改变运行期内容（第四阶段的纪律：不引入未验证变更）。
+ *
+ * ---------------------------------------------------------------------------
+ * 资源类表是**唯一事实源**：`verifyDist` 的 [1/6] 判定、`planMerge` 的取源策略、
+ * `merge` 的合并后自检、以及 `release.cjs` 备份清单的 critical 范围，全部读它。
+ * 字段：
+ *   id / type(dir|file) / required / minFiles / minBytes / desc / reason
+ *     —— 参与 verifyDist 的合格判定（缺失 / 空 / 文件数下限 / 字节下限 / 类型不符）
+ *   kind: build | asset | mod | both
+ *     —— **决定从哪一侧取源**：build = 构建产物；asset / mod = 资产源；both = 双源
+ *   prefer（仅 both 类）—— 无显式覆盖时的默认取源侧
+ *   sha256（可选，仅目录类）—— 是否纳入备份校验清单的 critical 范围；
+ *     只标「体积小且不可再生」者（assets 构建产物 / pkrc 手工配置）。
+ *     大资产（images/audio/battle-anims/fonts/locales）靠文件数+字节数判损伤。
  */
 const RESOURCE_CLASSES = [
   {
@@ -109,6 +122,7 @@ const RESOURCE_CLASSES = [
     type: "dir",
     required: true,
     minFiles: 3,
+    sha256: true, // 体积小且不可再生（每次构建都变）→ 入备份校验清单
     desc: "JS/CSS 构建产物（文件名带内容 hash）",
     reason: "每次构建都变，只能来自构建产物",
   },
@@ -222,6 +236,7 @@ const RESOURCE_CLASSES = [
     type: "dir",
     required: true,
     minFiles: 1,
+    sha256: true, // 手工配置（F-6/F-10 输入层依赖），体积小、不可再生 → 入备份校验清单
     desc: "PKRC 输入层配置（pkrc/config/input-config.json）",
     reason: "魔改自有，F-6/F-10 的输入层依赖它",
   },
@@ -673,6 +688,123 @@ const EXPECTED_TOP = ["assets", "audio", "battle-anims", "fonts", "images", "loc
 /** 关键目录的最少文件数（防止「目录在但是空的」这种半成品状态） */
 const MIN_FILES = { assets: 5, audio: 100, "battle-anims": 10, fonts: 2, images: 1000, locales: 1000 };
 
+/**
+ * 结构化完整性校验（B-7 发布门禁的进程内入口）。
+ *
+ * 为什么把「算」与「打印」分开：
+ *   release.cjs 必须在**不 spawn 子进程**的前提下复用同一套判据
+ *   （本沙箱 spawn 可执行文件会 EBUSY，见项目记忆）。把判据抽成纯函数，
+ *   人读的 `verify` 子命令与机器读的发布门禁就**不可能漂移**。
+ *   —— 「同一件事有两个实现」是本项目反复踩过的坑，此处从结构上避免。
+ *
+ * @param {string} dist
+ * @param {object} [opts]
+ * @param {boolean} [opts.atlas=true] 是否做 atlas 依赖扫描。发布门禁可关掉它 ——
+ *        它要解析 1.3 万个 JSON（约 1 分钟），而结论**从不参与失败判定**
+ *        （B-3 已定性为上游自身缺口），放在发布的关键路径上纯属浪费时间。
+ * @returns {object} 结构化结果；`failures` 为空即通过
+ */
+function verifyDist(dist, opts = {}) {
+  const doAtlas = opts.atlas !== false;
+  const r = {
+    ok: false,
+    dist,
+    exists: fs.existsSync(dist),
+    classes: [],
+    classesBad: [],
+    refs: { ok: [], missing: [], zero: [], manifestMissing: [], manifestError: null },
+    zeroReal: [],
+    zeroPlaceholders: 0,
+    atlas: null,
+    extras: [],
+    totals: { files: 0, bytes: 0 },
+    failures: [],
+  };
+  if (!r.exists) {
+    r.failures.push(`目录不存在：${dist}`);
+    return r;
+  }
+
+  // ① 14 类资源（表驱动）
+  for (const spec of RESOURCE_CLASSES) {
+    const m = measureClass(dist, spec);
+    r.classes.push({
+      id: spec.id,
+      kind: spec.kind,
+      type: spec.type,
+      files: m.files,
+      bytes: m.bytes,
+      zero: m.zero,
+      ok: m.ok,
+      failReason: m.failReason,
+    });
+    if (!m.ok) {
+      r.classesBad.push(spec.id);
+      r.failures.push(`${spec.id}（${spec.kind}）：${m.failReason}`);
+    }
+  }
+
+  // ② index.html / manifest 的字面量引用
+  const indexHtml = path.join(dist, "index.html");
+  if (!fs.existsSync(indexHtml)) {
+    r.failures.push("缺少 index.html");
+  } else {
+    const html = fs.readFileSync(indexHtml, "utf8");
+    const refs = new Set();
+    for (const m of html.matchAll(/(?:src|href)="(\.\/[^"]+)"/g)) refs.add(m[1].replace(/^\.\//, ""));
+    for (const m of html.matchAll(/url\('(\.\/[^']+)'\)/g)) refs.add(m[1].replace(/^\.\//, ""));
+    for (const ref of refs) {
+      const f = path.join(dist, ref);
+      if (!fs.existsSync(f)) {
+        r.refs.missing.push(ref);
+        r.failures.push(`index.html 引用不存在：${ref}`);
+      } else if (fs.statSync(f).size === 0) {
+        r.refs.zero.push(ref);
+        r.failures.push(`index.html 引用为零字节：${ref}`);
+      } else {
+        r.refs.ok.push(ref);
+      }
+    }
+    const manifestPath = path.join(dist, "manifest.webmanifest");
+    if (fs.existsSync(manifestPath)) {
+      try {
+        const man = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+        for (const icon of man.icons || []) {
+          if (!fs.existsSync(path.join(dist, icon.src))) {
+            r.refs.manifestMissing.push(icon.src);
+            r.failures.push(`manifest 引用不存在：${icon.src}`);
+          }
+        }
+      } catch (err) {
+        r.refs.manifestError = err.message;
+        r.failures.push(`manifest.webmanifest 解析失败：${err.message}`);
+      }
+    }
+  }
+
+  // ③ 零字节文件
+  const all = measure(dist);
+  r.totals = { files: all.files, bytes: all.bytes };
+  r.zeroReal = all.zero.filter((z) => path.basename(z) !== ".gitkeep");
+  r.zeroPlaceholders = all.zero.length - r.zeroReal.length;
+  if (r.zeroReal.length) {
+    r.failures.push(`发现 ${r.zeroReal.length} 个零字节文件`);
+  }
+
+  // ④ atlas 依赖（只报告不计失败）
+  r.atlas = doAtlas ? checkSpritePairs(path.join(dist, "images", "pokemon")) : null;
+  r.atlasSkipped = !doAtlas;
+
+  // ⑤ 顶层异常文件（只报告不计失败）
+  const allowed = new Set(ALLOWED_EXTRA_TOP.concat(RESOURCE_CLASSES.filter((c) => c.type === "file").map((c) => c.id)));
+  for (const e of fs.readdirSync(dist, { withFileTypes: true })) {
+    if (e.isFile() && !allowed.has(e.name)) r.extras.push(e.name);
+  }
+
+  r.ok = r.failures.length === 0;
+  return r;
+}
+
 async function cmdVerify() {
   const dist = path.resolve(opt("--dist") || DEFAULT_DIST);
   out("PKRC 资产完整性校验（降级路径）");
@@ -680,68 +812,36 @@ async function cmdVerify() {
   out(`目标目录：${dist}`);
   out("");
 
-  if (!fs.existsSync(dist)) {
+  const r = verifyDist(dist);
+  if (!r.exists) {
     out(`❌ 目录不存在：${dist}`);
     process.exitCode = 1;
     return;
   }
 
-  let failed = 0;
-  const fail = (msg) => {
-    failed++;
-    out(`  ❌ ${msg}`);
-  };
-
-  // ① 顶层结构（B-9：改为由 RESOURCE_CLASSES 表驱动，覆盖全部 14 类）
+  // ① 顶层资源类（B-9：由 RESOURCE_CLASSES 表驱动，覆盖全部 14 类）
   //
   // 为什么不再用写死的 EXPECTED_TOP：那只有 6 个目录，会漏掉
   // pkrc / logo* / manifest.webmanifest / starter-colors.json / exp-sprites.json
   // / service-worker.js —— 而这几个恰恰是 A5-01 §2.4 限制 #1 点名要求「就位」的。
   // 一个漏检的校验器比没有校验器更危险（会给出虚假的「通过」）。
   out("[1/6] 顶层资源类（RESOURCE_CLASSES 表驱动）");
-  let classBad = 0;
-  for (const spec of RESOURCE_CLASSES) {
-    const m = measureClass(dist, spec);
-    if (!m.ok) {
-      classBad++;
-      fail(`${spec.id}（${spec.kind}）：${m.failReason}`);
-    } else {
-      const size = spec.type === "dir" ? `${m.files} 文件  ${(m.bytes / 1048576).toFixed(1)} MB` : `${m.bytes} B`;
-      out(`  ✅ ${spec.id.padEnd(24)} ${spec.kind.padEnd(6)} ${size}`);
+  for (const c of r.classes) {
+    if (!c.ok) out(`  ❌ ${c.id}（${c.kind}）：${c.failReason}`);
+    else {
+      const size = c.type === "dir" ? `${c.files} 文件  ${(c.bytes / 1048576).toFixed(1)} MB` : `${c.bytes} B`;
+      out(`  ✅ ${c.id.padEnd(24)} ${c.kind.padEnd(6)} ${size}`);
     }
   }
-  out(`  —— ${RESOURCE_CLASSES.length} 类中 ${RESOURCE_CLASSES.length - classBad} 类就位`);
+  out(`  —— ${r.classes.length} 类中 ${r.classes.length - r.classesBad.length} 类就位`);
 
-  // ② index.html 与 manifest 的字面量引用
+  // ② 静态字面量引用
   out("[2/6] 静态字面量引用（index.html / manifest.webmanifest）");
-  const indexHtml = path.join(dist, "index.html");
-  if (!fs.existsSync(indexHtml)) {
-    fail("缺少 index.html");
-  } else {
-    const html = fs.readFileSync(indexHtml, "utf8");
-    const refs = new Set();
-    for (const m of html.matchAll(/(?:src|href)="(\.\/[^"]+)"/g)) refs.add(m[1].replace(/^\.\//, ""));
-    for (const m of html.matchAll(/url\('(\.\/[^']+)'\)/g)) refs.add(m[1].replace(/^\.\//, ""));
-    for (const r of refs) {
-      const f = path.join(dist, r);
-      if (!fs.existsSync(f)) fail(`index.html 引用不存在：${r}`);
-      else if (fs.statSync(f).size === 0) fail(`index.html 引用为零字节：${r}`);
-      else out(`  ✅ ${r}`);
-    }
-    const manifestPath = path.join(dist, "manifest.webmanifest");
-    if (fs.existsSync(manifestPath)) {
-      try {
-        const man = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-        for (const icon of man.icons || []) {
-          const f = path.join(dist, icon.src);
-          if (!fs.existsSync(f)) fail(`manifest 引用不存在：${icon.src}`);
-          else out(`  ✅ ${icon.src}（manifest icon）`);
-        }
-      } catch (err) {
-        fail(`manifest.webmanifest 解析失败：${err.message}`);
-      }
-    }
-  }
+  for (const ref of r.refs.ok) out(`  ✅ ${ref}`);
+  for (const m of r.refs.missing) out(`  ❌ index.html 引用不存在：${m}`);
+  for (const z of r.refs.zero) out(`  ❌ index.html 引用为零字节：${z}`);
+  for (const m of r.refs.manifestMissing) out(`  ❌ manifest 引用不存在：${m}`);
+  if (r.refs.manifestError) out(`  ❌ manifest.webmanifest 解析失败：${r.refs.manifestError}`);
 
   // ③ 零字节文件（资产拷贝不完整的典型信号）
   //
@@ -752,24 +852,13 @@ async function cmdVerify() {
   //
   // `.gitkeep` 是**有意为之**的占位符（0 字节正常），单独放行，不计入告警。
   out("[3/6] 零字节文件检测");
-  const all = measure(dist);
-  const zeroReal = all.zero.filter((z) => path.basename(z) !== ".gitkeep");
-  const zeroPlaceholders = all.zero.length - zeroReal.length;
-  if (zeroReal.length === 0) {
-    out(`  ✅ 无异常零字节文件${zeroPlaceholders ? `（已放行 ${zeroPlaceholders} 个占位符 .gitkeep）` : ""}`);
+  if (r.zeroReal.length === 0) {
+    out(`  ✅ 无异常零字节文件${r.zeroPlaceholders ? `（已放行 ${r.zeroPlaceholders} 个占位符 .gitkeep）` : ""}`);
   } else {
-    // 「空壳文件」= 文件名以某个同级目录名结尾（例如 `1这里正` 里含目录语义的中文名），
-    // 是批处理/拷贝事故的典型痕迹；孤立空壳危害低，同目录空壳优先报。
-    const shells = [];
-    const other = [];
-    for (const z of zeroReal) {
-      const base = path.basename(z);
-      shells.push(z);
-      if (/[\u4e00-\u9fa5]/u.test(base)) other.push(z);
-    }
-    fail(`发现 ${zeroReal.length} 个零字节文件（拷贝/解包事故的痕迹，前 8）：`);
-    for (const z of zeroReal.slice(0, 8)) out(`       ${path.relative(dist, z)}`);
-    if (zeroReal.length > 8) out(`       …… 另有 ${zeroReal.length - 8} 个`);
+    const other = r.zeroReal.filter((z) => /[\u4e00-\u9fa5]/u.test(path.basename(z)));
+    out(`  ❌ 发现 ${r.zeroReal.length} 个零字节文件（拷贝/解包事故的痕迹，前 8）：`);
+    for (const z of r.zeroReal.slice(0, 8)) out(`       ${path.relative(dist, z)}`);
+    if (r.zeroReal.length > 8) out(`       …… 另有 ${r.zeroReal.length - 8} 个`);
     out(`  ℹ️ 其中 ${other.length} 个文件名含中文字符（疑似「中文目录名被拼成文件名」的残留）。`);
     out("     运行时影响：低——这些名字不会被资源加载器请求（加载按 {id}.png 精确匹配），不阻塞游戏。");
     out("     但它是**拷贝可靠性**的告警信号：建议核对同批次的非零文件是否存在静默截断。");
@@ -781,8 +870,7 @@ async function cmdVerify() {
   // 因为上游 atlas 的 image 字段可跨目录引用（详见 checkSpritePairs 注释）。
   // 本项**只报告，不计入失败**：本地无法区分「上游本来就缺」与「拷贝丢了」。
   out("[4/6] atlas 依赖校验（images/pokemon/**，仅报告不计失败）");
-  const spriteRoot = path.join(dist, "images", "pokemon");
-  const pair = checkSpritePairs(spriteRoot);
+  const pair = r.atlas;
   out(`  ℹ️ atlas 型 json ${pair.atlas} 个，palette 型 json ${pair.palette} 个`);
   if (pair.dangling.length === 0 && pair.unparsable.length === 0) {
     out("  ✅ atlas 声明的贴图在 images/pokemon 全域均可找到，无解析失败");
@@ -806,25 +894,20 @@ async function cmdVerify() {
 
   // ⑤ 顶层异常文件（不应出现在 dist 根的构建/工具残留）
   out("[5/6] 顶层异常文件");
-  const unexpected = [];
-  const allowed = new Set(ALLOWED_EXTRA_TOP.concat(RESOURCE_CLASSES.filter((c) => c.type === "file").map((c) => c.id)));
-  for (const e of fs.readdirSync(dist, { withFileTypes: true })) {
-    if (e.isFile() && !allowed.has(e.name)) unexpected.push(e.name);
-  }
-  if (unexpected.length === 0) out("  ✅ 无异常文件");
+  if (r.extras.length === 0) out("  ✅ 无异常文件");
   else {
-    out(`  ⚠️ ${unexpected.length} 个非预期顶层文件（建议构建时排除）：`);
-    for (const u of unexpected) out(`       ${u}`);
+    out(`  ⚠️ ${r.extras.length} 个非预期顶层文件（建议构建时排除）：`);
+    for (const u of r.extras) out(`       ${u}`);
   }
 
   // ⑥ 汇总
   out("[6/6] 汇总");
-  out(`  文件总数：${all.files}`);
-  out(`  总字节数：${(all.bytes / 1048576).toFixed(1)} MB`);
+  out(`  文件总数：${r.totals.files}`);
+  out(`  总字节数：${(r.totals.bytes / 1048576).toFixed(1)} MB`);
   out("");
-  if (failed === 0) out("✅ 资产结构与引用完整性校验通过（降级路径）。");
+  if (r.ok) out("✅ 资产结构与引用完整性校验通过（降级路径）。");
   else {
-    out(`❌ ${failed} 项未通过。`);
+    out(`❌ ${r.failures.length} 项未通过。`);
     process.exitCode = 1;
   }
   out("");
@@ -949,48 +1032,54 @@ async function cmdSnapshot() {
  * 默认 dry-run；要落盘必须显式 `--commit`。这与 B-3 `assemble` 的约定一致：
  * 破坏性工具必须「显式确认」。
  */
-async function cmdMerge() {
-  const toRaw = opt("--to") || DEFAULT_DIST;
-  const to = path.resolve(toRaw);
-  const modeRaw = (opt("--mode") || (flag("--fill") ? "fill" : "replace")).toLowerCase();
-  const commit = flag("--commit");
-  const wantJson = flag("--json");
-  const force = flag("--force-replace");
-  const onlyRaw = opt("--only");
-  const only = onlyRaw
-    ? onlyRaw
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : null;
-
-  if (modeRaw !== "replace" && modeRaw !== "fill") {
-    out(`❌ 未知 --mode=${modeRaw}（可用：replace / fill）`);
-    process.exitCode = 2;
-    return;
-  }
-
-  const buildDir = opt("--build-dir") ? path.resolve(opt("--build-dir")) : null;
-  const assetSrcRaw = opt("--asset-source");
-  const assetSrc = assetSrcRaw ? path.resolve(assetSrcRaw) : modeRaw === "fill" ? to : null;
-  /** locales 双源策略覆盖（见文件头「locales 的双源冲突」） */
-  const localesFrom = opt("--locales-from") ? String(opt("--locales-from")).toLowerCase() : null;
-  /** locales 冲突胜者：overlay=保留 mod 文本（默认，见 unionLocales 注释）；base=采用上游较新文案 */
-  const localeConflict = opt("--locale-conflict") ? String(opt("--locale-conflict")).toLowerCase() : "overlay";
+/**
+ * 合并计划 —— **选源策略的唯一实现**（纯函数：不打印、不落盘、不设 exitCode）。
+ *
+ * 为什么要抽出来：B-7 发布脚本必须在**不 spawn 子进程**的前提下复用同一套策略
+ * （沙箱 spawn 可执行文件会 EBUSY）。若 release.cjs 自己再写一份「哪类从哪来」，
+ * 两份实现必然漂移 —— 而漂移的后果是「发布产物与校验产物不是同一套规则」，
+ * 这是最难查的一类问题。所以策略只有这一份，`merge` 子命令与 `release.cjs` 都调它。
+ *
+ * @param {object} opts
+ * @param {string} opts.to
+ * @param {"replace"|"fill"} opts.mode
+ * @param {string|null} [opts.buildDir]
+ * @param {string|null} [opts.assetSrc]   fill 模式缺省 = to（就地）
+ * @param {string|null} [opts.localesFrom] "build"|"asset"|"union"|null
+ * @param {string} [opts.localeConflict]  "overlay"|"base"
+ * @param {boolean} [opts.forceReplace]
+ * @param {string[]|null} [opts.only]
+ * @returns {{to:string, mode:string, buildDir:string|null, assetSrc:string|null,
+ *            localesFrom:string|null, localeConflict:string,
+ *            selected:object[], plan:object[], errors:string[], warnings:string[]}}
+ */
+function planMerge(opts) {
+  const to = path.resolve(opts.to);
+  const mode = opts.mode;
+  const buildDir = opts.buildDir ? path.resolve(opts.buildDir) : null;
+  const assetSrc = opts.assetSrc ? path.resolve(opts.assetSrc) : mode === "fill" ? to : null;
+  const localesFrom = opts.localesFrom ? String(opts.localesFrom).toLowerCase() : null;
+  const localeConflict = opts.localeConflict ? String(opts.localeConflict).toLowerCase() : "overlay";
+  const forceReplace = !!opts.forceReplace;
+  const only = opts.only || null;
 
   const errors = [];
-  const fail = (m) => errors.push(m);
   const warnings = [];
+  const fail = (m) => errors.push(m);
 
+  if (mode !== "replace" && mode !== "fill") {
+    fail(`未知模式：${mode}（可用 replace / fill）`);
+    return { to, mode, buildDir, assetSrc, localesFrom, localeConflict, selected: [], plan: [], errors, warnings };
+  }
   if (localesFrom && !["build", "asset", "union"].includes(localesFrom)) {
-    fail(`--locales-from 只能是 build / asset / union（收到 ${localesFrom}）`);
+    fail(`localesFrom 只能是 build / asset / union（收到 ${localesFrom}）`);
   }
   if (!["overlay", "base"].includes(localeConflict)) {
-    fail(`--locale-conflict 只能是 overlay / base（收到 ${localeConflict}）`);
+    fail(`localeConflict 只能是 overlay / base（收到 ${localeConflict}）`);
   }
 
   // ---- 预检 --------------------------------------------------------------
-  if (modeRaw === "replace") {
+  if (mode === "replace") {
     if (!buildDir) fail("--mode=replace 必须给 --build-dir=<构建产物目录>");
     else if (!fs.existsSync(path.join(buildDir, "index.html"))) fail(`--build-dir 缺少 index.html：${buildDir}`);
     else if (!fs.existsSync(path.join(buildDir, "assets"))) fail(`--build-dir 缺少 assets/：${buildDir}`);
@@ -1003,7 +1092,7 @@ async function cmdMerge() {
       } catch {
         /* ignore */
       }
-      if (population > 0 && !force) {
+      if (population > 0 && !forceReplace) {
         fail(
           `目标已存在且非空（${population} 项）：${to}\n` +
             "    replace 模式会**删除并整体覆盖**目录类。若确认这就是暂存目录，请加 --force-replace；\n" +
@@ -1022,7 +1111,7 @@ async function cmdMerge() {
     const unknown = only.filter((id) => !classSpec(id));
     if (unknown.length) fail(`--only 含未知资源类：${unknown.join(", ")}`);
   }
-  if (only && modeRaw === "fill") {
+  if (only && mode === "fill") {
     const buildIds = selected.filter((c) => c.kind === "build").map((c) => c.id);
     if (buildIds.length) fail(`--mode=fill 不能处理构建产物类：${buildIds.join(", ")}`);
   }
@@ -1032,13 +1121,13 @@ async function cmdMerge() {
   for (const spec of selected) {
     const row = { id: spec.id, kind: spec.kind, type: spec.type, desc: spec.desc };
 
-    if (modeRaw === "fill" && spec.kind === "build") {
+    if (mode === "fill" && spec.kind === "build") {
       row.action = "reject";
       row.note = "构建产物，fill 模式不处理";
       plan.push(row);
       continue;
     }
-    if (modeRaw === "fill" && spec.kind === "both") {
+    if (mode === "fill" && spec.kind === "both") {
       row.action = "reject";
       row.note = "构建产物优先，fill 模式不处理";
       plan.push(row);
@@ -1085,11 +1174,11 @@ async function cmdMerge() {
       plan.push(row);
       continue;
     }
-    row.action = modeRaw === "replace" ? "replace" : "fill";
+    row.action = mode === "replace" ? "replace" : "fill";
 
     // locales + union：不是「拷贝某一个源」，而是「两源合成」
     if (spec.id === "locales" && localesFrom === "union") {
-      if (modeRaw === "fill") {
+      if (mode === "fill") {
         row.action = "reject";
         row.note = "union 需要写整棵树，fill 模式不处理";
       } else if (!buildDir || !assetSrc) {
@@ -1123,6 +1212,108 @@ async function cmdMerge() {
     }
     plan.push(row);
   }
+
+  return { to, mode, buildDir, assetSrc, localesFrom, localeConflict, selected, plan, errors, warnings };
+}
+
+/**
+ * 执行合并计划（落盘）。与 `planMerge` 分离，便于「同一计划被两个入口执行」。
+ *
+ * @param {ReturnType<typeof planMerge>} pre
+ * @param {object} [o]
+ * @param {boolean} [o.commit]
+ * @param {(msg:string)=>void} [o.log]
+ * @param {boolean} [o.selfCheck=true]
+ *   合并后是否自检「本次选中的类是否就位」。
+ *   `cmdMerge` 需要它（那是它唯一的合格判定）；
+ *   `release.cjs` **关掉它**，因为发布流程由步骤 ③ 的 `verifyDist` 统一判定，
+ *   否则「类不全」会在两步各报一次，且 ③ 会被 ② 提前掐断。
+ *   关掉后 `failed` 只剩一个含义：**某个拷贝真的抛错了**。
+ * @returns {{done:Array<object>, check:Array<object>|null, failed:boolean}}
+ */
+function runMergePlan(pre, o = {}) {
+  const log = o.log || (() => {});
+  const commit = !!o.commit;
+  const selfCheck = o.selfCheck !== false; // 默认开，保持既有行为
+  const done = [];
+  let failed = false;
+
+  for (const r of pre.plan) {
+    if (r.action !== "replace" && r.action !== "fill" && r.action !== "union") continue;
+    if (!commit) {
+      done.push({ id: r.id, action: r.action, applied: false });
+      continue;
+    }
+    try {
+      if (r.action === "replace") {
+        fs.rmSync(r.dst, { recursive: true, force: true });
+        fs.mkdirSync(path.dirname(r.dst), { recursive: true });
+        fs.cpSync(r.src, r.dst, { recursive: true });
+        done.push({ id: r.id, action: "replace", applied: true });
+        log(`  ✅ ${r.id} 已覆盖`);
+      } else if (r.action === "union") {
+        const stats = unionLocales(path.join(pre.buildDir, r.id), path.join(pre.assetSrc, r.id), r.dst, {
+          conflict: pre.localeConflict,
+        });
+        done.push({ id: r.id, action: "union", applied: true, stats });
+        log(`  ✅ ${r.id} 并集完成：${stats.langs} 语言 / ${stats.files} 文件`);
+        log(`     基座侧独有 key 补入 ${stats.fromBase} 条；overlay（mod）侧独有 key 补入 ${stats.fromOverlay} 条`);
+        log(`     两侧同 key 不同值 ${stats.conflicts} 处 → 【${stats.conflictWinner === "overlay" ? "保留 mod 文本" : "采用上游文案"}】`);
+      } else {
+        const added = copyMissing(r.src, r.dst);
+        done.push({ id: r.id, action: "fill", applied: true, added });
+        log(`  ✅ ${r.id} 补齐 ${added} 个缺失文件`);
+      }
+    } catch (err) {
+      done.push({ id: r.id, action: r.action, applied: false, error: err.message });
+      log(`  ❌ ${r.id} 失败：${err.message}`);
+      failed = true;
+    }
+  }
+
+  let check = null;
+  if (selfCheck && commit && fs.existsSync(pre.to)) {
+    check = pre.selected.map((spec) => {
+      const m = measureClass(pre.to, spec);
+      return { id: spec.id, ok: m.ok, files: m.files, failReason: m.failReason };
+    });
+    if (check.some((c) => !c.ok)) failed = true;
+  }
+  return { done, check, failed };
+}
+
+async function cmdMerge() {
+  const toRaw = opt("--to") || DEFAULT_DIST;
+  const modeRaw = (opt("--mode") || (flag("--fill") ? "fill" : "replace")).toLowerCase();
+  const commit = flag("--commit");
+  const wantJson = flag("--json");
+  const onlyRaw = opt("--only");
+  const only = onlyRaw
+    ? onlyRaw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : null;
+  const assetSrcRaw = opt("--asset-source");
+
+  // 计划与执行分离：策略由 planMerge 唯一实现（release.cjs 复用同一份）
+  const pre = planMerge({
+    to: toRaw,
+    mode: modeRaw,
+    buildDir: opt("--build-dir"),
+    assetSrc: assetSrcRaw,
+    localesFrom: opt("--locales-from"),
+    localeConflict: opt("--locale-conflict"),
+    forceReplace: flag("--force-replace"),
+    only,
+  });
+  const to = pre.to;
+  const buildDir = pre.buildDir;
+  const assetSrc = pre.assetSrc;
+  const errors = pre.errors;
+  const warnings = pre.warnings;
+  const selected = pre.selected;
+  const plan = pre.plan;
 
   // ---- 输出计划 ----------------------------------------------------------
   if (!wantJson) {
@@ -1171,62 +1362,25 @@ async function cmdMerge() {
   }
 
   // ---- 执行 --------------------------------------------------------------
-  const done = [];
-  for (const r of plan) {
-    if (r.action !== "replace" && r.action !== "fill" && r.action !== "union") continue;
-    if (!commit) {
-      done.push({ id: r.id, action: r.action, applied: false });
-      continue;
-    }
-    try {
-      if (r.action === "replace") {
-        fs.rmSync(r.dst, { recursive: true, force: true });
-        fs.mkdirSync(path.dirname(r.dst), { recursive: true });
-        fs.cpSync(r.src, r.dst, { recursive: true });
-        done.push({ id: r.id, action: "replace", applied: true });
-        if (!wantJson) out(`  ✅ ${r.id} 已覆盖`);
-      } else if (r.action === "union") {
-        const stats = unionLocales(path.join(buildDir, r.id), path.join(assetSrc, r.id), r.dst, { conflict: localeConflict });
-        done.push({ id: r.id, action: "union", applied: true, stats });
-        if (!wantJson) {
-          out(`  ✅ ${r.id} 并集完成：${stats.langs} 语言 / ${stats.files} 文件`);
-          out(`     基座侧独有 key 补入 ${stats.fromBase} 条；overlay（mod）侧独有 key 补入 ${stats.fromOverlay} 条`);
-          out(`     两侧同 key 不同值 ${stats.conflicts} 处 → 【${stats.conflictWinner === "overlay" ? "保留 mod 文本" : "采用上游文案"}】`);
-          out(`     逐语言明细见 --json（stats.perLang）`);
-        }
-      } else {
-        const added = copyMissing(r.src, r.dst);
-        done.push({ id: r.id, action: "fill", applied: true, added });
-        if (!wantJson) out(`  ✅ ${r.id} 补齐 ${added} 个缺失文件`);
-      }
-    } catch (err) {
-      done.push({ id: r.id, action: r.action, applied: false, error: err.message });
-      if (!wantJson) out(`  ❌ ${r.id} 失败：${err.message}`);
-      process.exitCode = 1;
-    }
-  }
+  // 执行逻辑由 runMergePlan 唯一实现（release.cjs 复用同一份）
+  const exec = runMergePlan(pre, { commit, log: wantJson ? null : (m) => out(m) });
+  const done = exec.done;
+  if (exec.failed) process.exitCode = 1;
 
   // ---- 合并后自检 --------------------------------------------------------
   // ⚠️ 只自检**本次选中**的类：带 --only 时若仍按全表报「缺失」，会把
   //    「你本来就没让它处理」误报成「合并失败」。范围外的类单独说明。
-  let check = null;
+  const check = exec.check;
   const outOfScope = RESOURCE_CLASSES.filter((c) => !selected.includes(c)).map((c) => c.id);
-  if (commit && fs.existsSync(to)) {
-    check = selected.map((spec) => {
-      const m = measureClass(to, spec);
-      return { id: spec.id, ok: m.ok, files: m.files, failReason: m.failReason };
-    });
+  if (check && !wantJson) {
     const bad = check.filter((c) => !c.ok);
-    if (!wantJson) {
-      out("");
-      out(`合并后自检（本次选中 ${check.length} 类）：${check.length - bad.length}/${check.length} 类就位`);
-      for (const b of bad) out(`  ❌ ${b.id}：${b.failReason}`);
-      if (outOfScope.length) out(`  ℹ️ 范围外未检查：${outOfScope.join(", ")}`);
-      if (bad.length) {
-        out("  ℹ️ 缺的类若属于「资产源本身没有」，说明资产源不完整 —— 需先补资产源。");
-      }
+    out("");
+    out(`合并后自检（本次选中 ${check.length} 类）：${check.length - bad.length}/${check.length} 类就位`);
+    for (const b of bad) out(`  ❌ ${b.id}：${b.failReason}`);
+    if (outOfScope.length) out(`  ℹ️ 范围外未检查：${outOfScope.join(", ")}`);
+    if (bad.length) {
+      out("  ℹ️ 缺的类若属于「资产源本身没有」，说明资产源不完整 —— 需先补资产源。");
     }
-    if (bad.length) process.exitCode = 1;
   }
 
   if (wantJson) {
@@ -1668,6 +1822,9 @@ function diffManifests(baselinePath, current) {
 module.exports = {
   measure,
   measureClass,
+  verifyDist,
+  planMerge,
+  runMergePlan,
   checkSpritePairs,
   copyMissing,
   compareLocaleTrees,
