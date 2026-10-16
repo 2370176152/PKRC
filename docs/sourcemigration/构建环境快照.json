@@ -1,6 +1,6 @@
 {
-  "_comment": "PKRC 锚点树构建环境快照（B-6）。本文件由 tools/verify-env.cjs --snapshot 生成，供 tools/verify-env.cjs 校验。入库。",
-  "generatedAt": "2026-10-14T07:27:05.936Z",
+  "_comment": "PKRC 环境快照（B-6 构建环境 + B-10 走查环境）。本文件由 tools/verify-env.cjs --snapshot 生成，供 tools/verify-env.cjs 校验。入库。",
+  "generatedAt": "2026-10-16T09:43:07.591Z",
   "upstreamAnchor": {
     "repo": "pagefaultgames/pokerogue",
     "commit": "90df65097b6d",
@@ -43,5 +43,97 @@
       "exists": true,
       "jsonFiles": 1738
     }
+  },
+  "walkthrough": {
+    "runner": {
+      "node": "24.9.0",
+      "minNodeMajor": 22,
+      "majorOk": true,
+      "hasWebSocket": true,
+      "hasFetch": true
+    },
+    "browser": {
+      "found": "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+      "source": "default",
+      "sourceOfCandidates": "tools/walkthrough/lib/browser.mjs",
+      "version": "155.0.4283.45",
+      "tried": [
+        {
+          "path": "C:/Program Files/Google/Chrome/Application/chrome.exe",
+          "exists": false,
+          "source": "default"
+        },
+        {
+          "path": "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+          "exists": false,
+          "source": "default"
+        },
+        {
+          "path": "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
+          "exists": false,
+          "source": "default"
+        },
+        {
+          "path": "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+          "exists": true,
+          "source": "default"
+        }
+      ]
+    },
+    "imports": {
+      "mjsFiles": 16,
+      "builtin": [
+        "node:child_process",
+        "node:fs",
+        "node:http",
+        "node:os",
+        "node:path",
+        "node:url",
+        "node:zlib"
+      ],
+      "relative": [
+        "../../input-layer/input-arbiter.js",
+        "../input-layer/input-arbiter.js",
+        "./boot.mjs",
+        "./browser.mjs",
+        "./catalog-scenario.mjs",
+        "./catalog.mjs",
+        "./cdp.mjs",
+        "./input-smoke.mjs",
+        "./lib/png.mjs",
+        "./lib/products.mjs",
+        "./lib/report.mjs",
+        "./lib/runner.mjs",
+        "./png.mjs",
+        "./products.mjs",
+        "./save-inject.mjs",
+        "./scenarios/catalog.mjs",
+        "./scenarios/index.mjs",
+        "./session.mjs",
+        "./static-server.mjs"
+      ],
+      "external": []
+    },
+    "localDeps": [
+      {
+        "rel": "tools/input-layer/input-arbiter.js",
+        "why": "input-smoke 场景复用 F-6 的键鼠仲裁语义",
+        "exists": true
+      }
+    ],
+    "dirs": [
+      {
+        "id": "A",
+        "label": "modder 原产物",
+        "rel": "game/server/dist.modder-backup-20261016",
+        "exists": true
+      },
+      {
+        "id": "B",
+        "label": "自构建产物",
+        "rel": "game/server/dist",
+        "exists": true
+      }
+    ]
   }
 }
