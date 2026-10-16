@@ -1,0 +1,475 @@
+{
+  "batch": "B0",
+  "namespace": "pkrc.common",
+  "file": "pkrc-common.json",
+  "generated": "2026-10-15",
+  "generator": "U-5（UI 设计师）",
+  "source_manifest": "docs/sourcemigration/i18n-batch-manifest.json",
+  "source_product": "game/server/dist/assets/loading-scene-By2k7Qfx.js",
+  "summary": {
+    "manifest_records": 29,
+    "unique_texts": 24,
+    "reuse_upstream": 1,
+    "new_keys_in_json": 24,
+    "collision_split": 1,
+    "reconciliation": "29 条记录 = 24 去重文案；返回(1) 复用上游不新建；回响同名不同天赋拆 2 key；24-1+1=24 keys"
+  },
+  "screening": {
+    "method": "value 反查：anchor locales/zh-Hans/**（6371 keys）+ 改版 dist locales/zh-CN/**（5316 keys）",
+    "hit": 1,
+    "miss": 23,
+    "hit_detail": "返回 → anchor menu:goBack / anchor settings:back / mod settings:back（取 menu:goBack）"
+  },
+  "namespace_registration": {
+    "namespaceMap_entry_required": {
+      "pkrc.common": "pkrc-common"
+    },
+    "reason": "toKebabCase 不拆点号，pkrc.common 会解析为 pkrc.common.json；nsEn 由 namespaces-i18n-plugin 构建时自动发现，无需手工登记",
+    "call_form": "M.t(\"pkrc.common:<key>\")"
+  },
+  "records": [
+    {
+      "line": 335,
+      "kind": "static",
+      "text": "快板",
+      "key": "pkrc.common:melodyAllegro",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "音律系统天赋名（美洛耶塔/节拍）",
+      "note": "",
+      "product_occurrences": 1,
+      "occurrence_lines": [
+        335
+      ]
+    },
+    {
+      "line": 335,
+      "kind": "static",
+      "text": "和声",
+      "key": "pkrc.common:melodyHarmony",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "音律系统天赋名（美洛耶塔/节拍）",
+      "note": "",
+      "product_occurrences": 1,
+      "occurrence_lines": [
+        335
+      ]
+    },
+    {
+      "line": 335,
+      "kind": "static",
+      "text": "渐强",
+      "key": "pkrc.common:melodyCrescendo",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "音律系统天赋名（美洛耶塔/节拍）",
+      "note": "",
+      "product_occurrences": 1,
+      "occurrence_lines": [
+        335
+      ]
+    },
+    {
+      "line": 335,
+      "kind": "static",
+      "text": "终曲",
+      "key": "pkrc.common:melodyFinale",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "音律系统天赋名（美洛耶塔/节拍）",
+      "note": "",
+      "product_occurrences": 1,
+      "occurrence_lines": [
+        335
+      ]
+    },
+    {
+      "line": 335,
+      "kind": "static",
+      "text": "回响",
+      "key": "pkrc.common:melodyEcho",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "音律系统天赋名（美洛耶塔/节拍）",
+      "note": "与 L351 感电天赋同名，拆两个 key",
+      "product_occurrences": 2,
+      "occurrence_lines": [
+        335,
+        351
+      ]
+    },
+    {
+      "line": 349,
+      "kind": "static",
+      "text": "蓄雷",
+      "key": "pkrc.common:shockCharge",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "感电系统天赋名",
+      "note": "",
+      "product_occurrences": 1,
+      "occurrence_lines": [
+        349
+      ]
+    },
+    {
+      "line": 351,
+      "kind": "static",
+      "text": "回响",
+      "key": "pkrc.common:shockEcho",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "感电系统天赋名",
+      "note": "与 L335 音律天赋同名，拆两个 key",
+      "product_occurrences": 2,
+      "occurrence_lines": [
+        335,
+        351
+      ]
+    },
+    {
+      "line": 353,
+      "kind": "static",
+      "text": "雷网",
+      "key": "pkrc.common:shockNet",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "感电系统天赋名",
+      "note": "",
+      "product_occurrences": 1,
+      "occurrence_lines": [
+        353
+      ]
+    },
+    {
+      "line": 356,
+      "kind": "static",
+      "text": "万钧",
+      "key": "pkrc.common:shockThunder",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "感电系统天赋名",
+      "note": "",
+      "product_occurrences": 1,
+      "occurrence_lines": [
+        356
+      ]
+    },
+    {
+      "line": 360,
+      "kind": "static",
+      "text": "温柔的余响",
+      "key": "pkrc.common:mendGentleEcho",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "治疗系统天赋名（生机/圣咏）",
+      "note": "",
+      "product_occurrences": 1,
+      "occurrence_lines": [
+        360
+      ]
+    },
+    {
+      "line": 360,
+      "kind": "static",
+      "text": "净化之息",
+      "key": "pkrc.common:mendPurifyingBreath",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "治疗系统天赋名（生机/圣咏）",
+      "note": "",
+      "product_occurrences": 1,
+      "occurrence_lines": [
+        360
+      ]
+    },
+    {
+      "line": 361,
+      "kind": "static",
+      "text": "共鸣的羁绊",
+      "key": "pkrc.common:mendResonanceBond",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "治疗系统天赋名（生机/圣咏）",
+      "note": "",
+      "product_occurrences": 1,
+      "occurrence_lines": [
+        361
+      ]
+    },
+    {
+      "line": 361,
+      "kind": "static",
+      "text": "不灭的祈愿",
+      "key": "pkrc.common:mendUndyingWish",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "治疗系统天赋名（生机/圣咏）",
+      "note": "",
+      "product_occurrences": 1,
+      "occurrence_lines": [
+        361
+      ]
+    },
+    {
+      "line": 363,
+      "kind": "static",
+      "text": "生命的共鸣",
+      "key": "pkrc.common:mendLifeResonance",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "治疗系统天赋名（生机/圣咏）",
+      "note": "",
+      "product_occurrences": 1,
+      "occurrence_lines": [
+        363
+      ]
+    },
+    {
+      "line": 405,
+      "kind": "static",
+      "text": "当前宝可梦",
+      "key": "pkrc.common:currentPokemon",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "PT/蛋商店/被动解锁 fallback 标签",
+      "note": "",
+      "product_occurrences": 6,
+      "occurrence_lines": [
+        405,
+        405,
+        408,
+        408,
+        448,
+        448
+      ]
+    },
+    {
+      "line": 405,
+      "kind": "static",
+      "text": "当前宝可梦",
+      "key": "pkrc.common:currentPokemon",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "PT/蛋商店/被动解锁 fallback 标签",
+      "note": "",
+      "product_occurrences": 6,
+      "occurrence_lines": [
+        405,
+        405,
+        408,
+        408,
+        448,
+        448
+      ]
+    },
+    {
+      "line": 408,
+      "kind": "static",
+      "text": "当前宝可梦",
+      "key": "pkrc.common:currentPokemon",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "PT/蛋商店/被动解锁 fallback 标签",
+      "note": "",
+      "product_occurrences": 6,
+      "occurrence_lines": [
+        405,
+        405,
+        408,
+        408,
+        448,
+        448
+      ]
+    },
+    {
+      "line": 408,
+      "kind": "static",
+      "text": "当前宝可梦",
+      "key": "pkrc.common:currentPokemon",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "PT/蛋商店/被动解锁 fallback 标签",
+      "note": "",
+      "product_occurrences": 6,
+      "occurrence_lines": [
+        405,
+        405,
+        408,
+        408,
+        448,
+        448
+      ]
+    },
+    {
+      "line": 423,
+      "kind": "static",
+      "text": "返回",
+      "key": null,
+      "action": "reuse",
+      "reuse_target": "menu:goBack",
+      "system_context": "导航按钮（starter-select）",
+      "note": "复用上游 menu:goBack，不新建",
+      "product_occurrences": 11,
+      "occurrence_lines": [
+        367,
+        367,
+        371,
+        423,
+        440,
+        453,
+        456,
+        456,
+        466,
+        467,
+        472
+      ]
+    },
+    {
+      "line": 446,
+      "kind": "static",
+      "text": "标签",
+      "key": "pkrc.common:tagFallback",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "天赋标签名 fallback（TAG_COUNT 条件）",
+      "note": "",
+      "product_occurrences": 1,
+      "occurrence_lines": [
+        446
+      ]
+    },
+    {
+      "line": 457,
+      "kind": "static",
+      "text": "突破（已满）",
+      "key": "pkrc.common:breakthroughMaxed",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "突破系统 label（7/7 封顶态）",
+      "note": "",
+      "product_occurrences": 1,
+      "occurrence_lines": [
+        457
+      ]
+    },
+    {
+      "line": 457,
+      "kind": "static",
+      "text": "突破",
+      "key": "pkrc.common:breakthrough",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "突破系统 label",
+      "note": "",
+      "product_occurrences": 3,
+      "occurrence_lines": [
+        456,
+        457,
+        467
+      ]
+    },
+    {
+      "line": 471,
+      "kind": "static",
+      "text": "回到大厅。",
+      "key": "pkrc.common:backToLobby",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "地牢详情提示（深渊/材料本）",
+      "note": "",
+      "product_occurrences": 2,
+      "occurrence_lines": [
+        471,
+        471
+      ]
+    },
+    {
+      "line": 471,
+      "kind": "static",
+      "text": "回到大厅。",
+      "key": "pkrc.common:backToLobby",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "地牢详情提示（深渊/材料本）",
+      "note": "",
+      "product_occurrences": 2,
+      "occurrence_lines": [
+        471,
+        471
+      ]
+    },
+    {
+      "line": 995,
+      "kind": "static",
+      "text": "溢念",
+      "key": "pkrc.common:psyOverflow",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "念力系统天赋名",
+      "note": "",
+      "product_occurrences": 1,
+      "occurrence_lines": [
+        995
+      ]
+    },
+    {
+      "line": 995,
+      "kind": "static",
+      "text": "念之意志",
+      "key": "pkrc.common:psyWill",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "念力系统天赋名",
+      "note": "",
+      "product_occurrences": 1,
+      "occurrence_lines": [
+        995
+      ]
+    },
+    {
+      "line": 1024,
+      "kind": "static",
+      "text": "余温未散",
+      "key": "pkrc.common:emberLingeringWarmth",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "火系天赋名（潜心）",
+      "note": "",
+      "product_occurrences": 1,
+      "occurrence_lines": [
+        1024
+      ]
+    },
+    {
+      "line": 1027,
+      "kind": "static",
+      "text": "完美谢幕",
+      "key": "pkrc.common:emberPerfectFinale",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "火系天赋名（潜心）",
+      "note": "",
+      "product_occurrences": 1,
+      "occurrence_lines": [
+        1027
+      ]
+    },
+    {
+      "line": 1029,
+      "kind": "static",
+      "text": "控制抵挡",
+      "key": "pkrc.common:controlResist",
+      "action": "new",
+      "reuse_target": null,
+      "system_context": "buff 名（control-block 层数）",
+      "note": "",
+      "product_occurrences": 2,
+      "occurrence_lines": [
+        364,
+        1029
+      ]
+    }
+  ]
+}
