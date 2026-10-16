@@ -108,6 +108,24 @@ game/server/dist.old/
 game/server/dist.rollback-*/
 game/server/dist.broken/
 
+# ------------------------------------------------------------
+# A5-01 产物切换备份（第三阶段新增）
+#   切换时把 modder 原产物整体改名为 dist.modder-backup-<日期>/
+#   约 7.9 MB，**可回滚依据**，但不入库：
+#     · modder 原产物已完整保存在 PKRC-repo.bundle（该仓库 4b6fe00 含 built assets）
+#     · 入库会与 PKRC-repo.bundle 内容重复
+#   注：此处用了 `-*` 后缀通配（备份带日期戳），
+#       不会误伤 game/server/dist/ 本身（无该后缀）。
+game/server/dist.modder-backup-*/
+
+# ------------------------------------------------------------
+# 临时调试产物（第三阶段新增）
+#   例：eryou_err.txt —— 锚点树 ERYOU 类型错的一次性抓取日志。
+#   该问题已修复（见 docs/sourcemigration/A0-复核与ERYOU符号消解.md），
+#   日志本身无留存价值，不入库。
+# ------------------------------------------------------------
+eryou_err.txt
+
 # ============================================================
 # 原始仓库副本（PKRC/ 为独立 git 仓库，纳入会造成 gitlink 与内容重复）
 # 注：PKRC-repo.bundle 作为原始版本的单文件备份保留入库
