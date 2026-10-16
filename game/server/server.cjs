@@ -12,6 +12,12 @@
  *   - 【D3】不得新增运行时依赖（Express 4 + Node 内置模块，仅此而已）
  *   - 【优雅关闭】close() 返回的 Promise 必定 resolve（带超时保护）
  *
+ * B-11（第四阶段，2026-10-16）追加的**纯增量**能力，用于自动化走查（F-10/A4-01/A4-04）：
+ *   - `--ready-file=<path>`：listen 成功后原子写一个 JSON 就绪信号（含**实际端口**）
+ *   - `GET /__pkrc/health`：保留命名空间下的只读探活端点
+ *   - `--log-dir` 已可指向走查证据目录（logger 自动建目录，无需改动）
+ *   ⇒ 三者都**不改变**任何既有路径的行为；不带这些参数时与改造前完全一致。
+ *
  * 与原实现的**已知行为差异**（有意为之，均已登记）：
  *   | 项 | 原实现 | 现实现 | 理由 |
  *   |---|---|---|---|
@@ -35,6 +41,19 @@ const DEFAULT_LOG_DIR = path.join(__dirname, "..", "logs");
 /** close() 的超时保护：Electron 退出不能被残留 keep-alive 连接拖死 */
 const CLOSE_TIMEOUT_MS = 3000;
 
+/**
+ * B-11 · 保留命名空间下的健康端点。
+ *
+ * 为什么用 `__pkrc/` 前缀：兜底路由 `app.get("*")` 对**任意**未命中路径返回
+ * `200 + {ok:false}`（有意保留的历史行为）。若健康端点用普通路径（如 `/health`），
+ * 一旦前端某天真的要请求 `/health`，就会撞上这个保留路径 —— 用一个前端不可能用的
+ * 前缀可以彻底避免语义冲突，且**不改变**任何既有路径的行为。
+ */
+const HEALTH_PATH = "/__pkrc/health";
+
+/** 就绪文件的格式版本；驱动方（headless browser / CI / release.cjs）据此判读 */
+const READY_FILE_VERSION = 1;
+
 // ---------------------------------------------------------------------------
 // 参数解析
 // ---------------------------------------------------------------------------
@@ -42,7 +61,7 @@ const CLOSE_TIMEOUT_MS = 3000;
 /**
  * 解析命令行参数。**不依赖任何第三方 argv 库**（D3）。
  *
- * 支持：
+ * 支持（`--k=v` 与 `--k v` **两种写法都认**）：
  *   --serve-only          只起服务，不拉起 Electron
  *   --no-open             起服务 + Electron，但不自动开浏览器
  *   --dev                 控制台保留输出 + DEBUG 级别日志
@@ -50,7 +69,16 @@ const CLOSE_TIMEOUT_MS = 3000;
  *   --port=<n>            等价于 PORT 环境变量（环境变量优先，见 resolvePort）
  *   --keep=<n>            日志保留份数
  *   --log-dir=<path>      日志目录
+ *   --ready-file=<path>   【B-11】启动就绪后写一个 JSON 信号文件（供自动化等待）
+ *   --no-ready-file       【B-11】显式关闭就绪文件
  *   --help / -h           打印帮助
+ *
+ * ⚠️ 为什么**必须**同时认空格形式（2026-10-16 补）：
+ *    原实现只认 `--k=v`。文档里写的全是等号形式，所以一直没暴露。但这正是项目
+ *    已登记过的一类隐蔽 bug ——「文档写等号、代码只认空格」（或反之）会导致参数
+ *    **被静默忽略并 fallback 到默认值**，表面上还"成功"了。
+ *    取值型选项统一走 `VALUE_OPTS`，两种写法共用同一条取值路径。
+ *    纯布尔选项（--serve-only 等）不吃下一个参数，避免误吞。
  *
  * @param {string[]} argv  通常传 process.argv.slice(2)
  */
@@ -64,13 +92,23 @@ function parseArgs(argv = []) {
     port: undefined,
     keep: undefined,
     logDir: undefined,
+    readyFile: undefined,
   };
 
-  for (const raw of argv) {
+  /** 需要**取值**的选项（只有这些才允许吞掉下一个 argv） */
+  const VALUE_OPTS = new Set(["--static-dir", "--port", "--keep", "--log-dir", "--ready-file"]);
+
+  for (let i = 0; i < argv.length; i++) {
+    const raw = argv[i];
     if (!raw || raw[0] !== "-") continue;
     const eq = raw.indexOf("=");
     const key = eq === -1 ? raw : raw.slice(0, eq);
-    const val = eq === -1 ? undefined : raw.slice(eq + 1);
+    let val = eq === -1 ? undefined : raw.slice(eq + 1);
+    // 空格形式：`--k v`。仅对取值型选项生效，且下一项不得是另一个选项。
+    if (eq === -1 && VALUE_OPTS.has(key) && argv[i + 1] !== undefined && argv[i + 1].charAt(0) !== "-") {
+      val = argv[i + 1];
+      i++;
+    }
 
     switch (key) {
       case "--serve-only":
@@ -102,6 +140,13 @@ function parseArgs(argv = []) {
         // `--log-dir=` （显式空值）= 禁用文件日志，只输出到控制台
         out.logDir = val ? val : null;
         break;
+      case "--ready-file":
+        // 三态语义与 --log-dir 一致：未给 = undefined；`--ready-file=` 显式空值 = 禁用
+        out.readyFile = val ? val : null;
+        break;
+      case "--no-ready-file":
+        out.readyFile = null;
+        break;
       default:
         // 未知参数不致命：可能是全栈的启动器透传参数。记下来但继续。
         break;
@@ -120,8 +165,10 @@ const HELP = `PKRC Express 静态服务 · S1
   --dev                 保留控制台输出 + DEBUG 级别日志
   --static-dir=<path>   静态目录（默认 ./dist）
   --port=<n>            监听端口（默认 8000；PORT 环境变量优先级更高）
-  --log-dir=<path>      日志目录（默认 ../logs）
+  --log-dir=<path>      日志目录（默认 ../logs；目录不存在会自动创建）
   --keep=<n>            日志保留份数（默认 10）
+  --ready-file=<path>   启动就绪后写 JSON 信号文件（供 headless browser / CI 等待）
+  --no-ready-file       显式关闭就绪文件
   -h, --help            显示本帮助
 
 环境变量：
@@ -132,6 +179,13 @@ const HELP = `PKRC Express 静态服务 · S1
   PORT=8100 node server.cjs                # 监听 8100
   node server.cjs --serve-only --dev       # 只起服务，详细日志
   node server.cjs --static-dir=./other-dist
+
+  # B-11 走查/自动化：固定端口 + 日志定向 + 就绪信号
+  node server.cjs --serve-only --port=8099 --static-dir=./dist \\
+                  --log-dir=../../tools/walkthrough/evidence/<场景>/logs \\
+                  --ready-file=../../tools/walkthrough/evidence/<场景>/ready.json
+  # 就绪探测（服务起来后）：
+  #   curl -s http://127.0.0.1:8099/__pkrc/health
 `;
 
 /**
@@ -172,6 +226,27 @@ function createApp(opts = {}) {
   const app = express();
 
   app.disable("x-powered-by");
+  app.locals.startedAt = Date.now();
+  app.locals.port = null; // startServer 监听成功后回填（createApp 阶段还不知道端口）
+
+  // ---- 0. 健康端点（B-11）-------------------------------------------------
+  // 注册在静态资源**之前**，以保证 `__pkrc/` 命名空间不被 dist 里的同名文件占用。
+  // 语义：纯只读探活，不触碰 dist；这是自动化「等待服务就绪」的最简判据。
+  //
+  // ⚠️ 它**不**改变兜底路由的行为：`/__pkrc/health` 之外的所有路径照旧走
+  //    `200 + {ok:false}` 的原有语义（详见下方 catchAll 注释）。
+  app.get(HEALTH_PATH, (_req, res) => {
+    res.json({
+      ok: true,
+      app: "pkrc-server",
+      pid: process.pid,
+      node: process.version,
+      port: app.locals.port,
+      staticDir: app.locals.staticDir,
+      startedAt: new Date(app.locals.startedAt).toISOString(),
+      uptimeMs: Date.now() - app.locals.startedAt,
+    });
+  });
 
   // ---- 1. 静态资源 --------------------------------------------------------
   app.use(express.static(staticDir));
@@ -232,6 +307,35 @@ function createApp(opts = {}) {
 // ---------------------------------------------------------------------------
 
 /**
+ * B-11 · 写「就绪信号」文件。
+ *
+ * 为什么用**文件**而不是只靠日志/HTTP：驱动方（headless browser、CI、shell）
+ * 需要在「服务已 listen 完毕」这一刻被唤醒，且要能拿到**实际端口**（`--port=0`
+ * 时是内核分配的）。轮询 HTTP 有竞态（端口未知），解析日志太脆弱
+ * （依赖日志格式，且日志可能被禁用）。一次原子写文件是最稳的握手。
+ *
+ * 失败时**不抛错**：就绪信号是辅助能力，不能因为它拖垮服务启动。
+ *
+ * @param {string|null|undefined} filePath
+ * @param {object} payload
+ * @returns {string|null} 实际写入路径；未写返回 null
+ */
+function writeReadyFile(filePath, payload) {
+  if (!filePath) return null;
+  try {
+    const abs = path.resolve(filePath);
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    // 先写临时文件再 rename：避免驱动方读到**写了一半**的 JSON
+    const tmp = `${abs}.tmp-${process.pid}`;
+    fs.writeFileSync(tmp, JSON.stringify(payload, null, 2), "utf8");
+    fs.renameSync(tmp, abs);
+    return abs;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 启动服务。
  *
  * @param {object} [opts]
@@ -239,7 +343,9 @@ function createApp(opts = {}) {
  * @param {string} [opts.staticDir]
  * @param {object} [opts.logger]
  * @param {string} [opts.host]
- * @returns {Promise<{port:number, host:string, url:string, close:()=>Promise<void>, server:import('http').Server, app:import('express').Express}>}
+ * @param {string} [opts.readyFile]     就绪后写 JSON 信号文件（B-11）
+ * @param {string} [opts.tag]           就绪文件里的用途标签（如 "walkthrough"）
+ * @returns {Promise<{port:number, host:string, url:string, readyFile:string|null, close:()=>Promise<void>, server:import('http').Server, app:import('express').Express}>}
  */
 async function startServer(opts = {}) {
   const logger = opts.logger || createLogger({ logDir: null, silent: true });
@@ -270,14 +376,42 @@ async function startServer(opts = {}) {
 
   // 从 server.address() 读真实端口 —— port=0 时拿到的是内核分配值
   const actualPort = server.address().port;
+  app.locals.port = actualPort; // 供 /__pkrc/health 使用
   const url = `http://${host === "0.0.0.0" ? "localhost" : host}:${actualPort}/`;
   logger.info(`server listening on ${url} (static: ${app.locals.staticDir})`);
+
+  // ---- B-11 就绪信号 ------------------------------------------------------
+  const readyFile = writeReadyFile(opts.readyFile, {
+    version: READY_FILE_VERSION,
+    ok: true,
+    tag: opts.tag || null,
+    pid: process.pid,
+    node: process.version,
+    host,
+    port: actualPort,
+    url,
+    healthPath: HEALTH_PATH,
+    staticDir: app.locals.staticDir,
+    logFile: logger.currentLogPath() || null,
+    startedAt: new Date(app.locals.startedAt).toISOString(),
+  });
+  if (readyFile) logger.info(`ready file: ${readyFile}`);
 
   let closed = false;
   const close = () =>
     new Promise((resolve) => {
       if (closed) return resolve();
       closed = true;
+      // 就绪文件在关闭时删除：驱动方据此判断「服务已不在」。
+      // ⚠️ 硬杀（SIGKILL / 任务管理器）不会走到这里 → 残留文件可能过时，
+      //    驱动方应**同时**用 pid liveness 或 /__pkrc/health 复核（已写入文档）。
+      if (readyFile) {
+        try {
+          fs.unlinkSync(readyFile);
+        } catch {
+          /* 已被删或不可写，忽略 */
+        }
+      }
       // 超时保护：3s 内无论如何都要 resolve，绝不让 Electron 卡在退出上
       const timer = setTimeout(() => {
         logger.warn(`close() 超时 ${CLOSE_TIMEOUT_MS}ms，强制释放端口`);
@@ -303,7 +437,7 @@ async function startServer(opts = {}) {
       }
     });
 
-  return { port: actualPort, host, url, close, server, app };
+  return { port: actualPort, host, url, readyFile, close, server, app };
 }
 
 // ---------------------------------------------------------------------------
@@ -343,6 +477,9 @@ async function main(argv = process.argv.slice(2)) {
     port = resolvePort(args.port);
   } catch (err) {
     logger.error(err.message);
+    // B-11：失败也要**留下就绪信号**（ok:false），否则驱动方会一直等到超时，
+    // 无法区分「起来但崩了」与「压根没起」。
+    writeReadyFile(args.readyFile, { version: READY_FILE_VERSION, ok: false, stage: "port", error: err.message, pid: process.pid });
     return 2;
   }
 
@@ -353,6 +490,8 @@ async function main(argv = process.argv.slice(2)) {
       port,
       staticDir: args.staticDir,
       logger,
+      readyFile: args.readyFile,
+      tag: "cli",
     });
   } catch (err) {
     if (err && err.code === "EADDRINUSE") {
@@ -367,6 +506,15 @@ async function main(argv = process.argv.slice(2)) {
       logger.error("服务启动失败", err);
     }
     logger.info(`日志文件：${logger.currentLogPath() || "(未启用)"}`);
+    writeReadyFile(args.readyFile, {
+      version: READY_FILE_VERSION,
+      ok: false,
+      stage: "listen",
+      error: err && err.code ? `${err.code}: ${err.message}` : String(err && err.message ? err.message : err),
+      port,
+      pid: process.pid,
+      logFile: logger.currentLogPath() || null,
+    });
     return 1;
   }
 
@@ -409,12 +557,15 @@ async function main(argv = process.argv.slice(2)) {
 module.exports = {
   createApp,
   startServer,
+  writeReadyFile,
   parseArgs,
   resolvePort,
   DEFAULT_PORT,
   DEFAULT_STATIC_DIR,
   DEFAULT_LOG_DIR,
   CLOSE_TIMEOUT_MS,
+  HEALTH_PATH,
+  READY_FILE_VERSION,
 };
 
 // 仅在直接运行本文件时执行 CLI；被 require 时（S7 / 单测）不执行。

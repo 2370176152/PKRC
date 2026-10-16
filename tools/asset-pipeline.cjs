@@ -23,6 +23,11 @@
  *   assemble   从来源目录组装资产到目标 dist（默认 dry-run，--write 才落盘）
  *   snapshot   产出资产快照 JSON（供增量比对）
  *
+ * B-9 追加（第四阶段，2026-10-16）：
+ *   merge      「构建产物 + 资产源」合并管线（默认 dry-run；--mode=replace|fill）
+ *   manifest   产出 dist 清单 JSON（逐类文件数/字节/零字节 + 关键文件 SHA256；可 --compare 比对）
+ *   verify     已**增强**：改为由 RESOURCE_CLASSES 表驱动，覆盖全部 14 类资源
+ *
  * 设计取舍：
  *   - **零依赖**（D3）：网络用 Node 内置 `https`，不用 axios/got。
  *   - **不 spawn 子进程**：早期用 `git ls-remote` 子进程，在受限环境 EBUSY。
@@ -38,6 +43,7 @@ const fs = require("fs");
 const path = require("path");
 const https = require("https");
 const zlib = require("zlib");
+const crypto = require("crypto");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 const DEFAULT_DIST = path.join(REPO_ROOT, "game", "server", "dist");
@@ -49,6 +55,263 @@ const UPSTREAM = {
   gitlink: "4c6fac5fd9cb30ff2a35562409d869b94492b343",
   pokerogueRef: "90df65097b6d",
 };
+
+// ---------------------------------------------------------------------------
+// B-9 · 资源类表 —— 「构建产物 + 资产源」合并管线的契约
+// ---------------------------------------------------------------------------
+/**
+ * `kind` 决定「这一类由谁提供」，是 merge 管线唯一的选源依据：
+ *
+ *   build —— vite 构建产出。文件名带内容 hash，**每次构建都变** → 必须来自构建产物。
+ *   asset —— 来自 `pokerogue-assets` 子模块。构建期由
+ *            `plugins/vite/vite-minify-json-plugin.ts` 把 `<root>/assets/**`
+ *            拷进 `dist/**`（JSON 顺手 minify），`<root>/locales/**` 拷进
+ *            `dist/locales/**`。
+ *   mod   —— PKRC 魔改自有，上游与 assets 子模块都没有。
+ *   both  —— 两边都可能有；优先取构建产物（更新鲜），退回资产源。
+ *
+ * ⚠️ 为什么不是 `publicDir`：
+ *    上游 `vite.config.ts` 是 `publicDir: command === "serve" ? "assets" : false`
+ *    —— build 模式**不**走 publicDir。真正把资产搬进 dist 的是上面那个插件
+ *    （`apply: "build"` + `enforce: "post"`）。**这一条是 B-9 存在的全部理由**：
+ *    本地 `assets/` 子模块是降级项（只拉了 2 个 masterlist），于是构建产物天然不完整，
+ *    必须由本管线把「资产源」合并进来。
+ *
+ * ⚠️ 来源归属的**诚实标注**：
+ *    `manifest.webmanifest` / `logo128.png` / `logo512.png` 归为 asset 是**推断**
+ *    （本地 assets 子模块不完整，无法实证其属于该子模块）。反证：锚点树构建产物
+ *    `dist/` 里**没有**这三个文件，而本地 `assets/` 里也没有 —— 一致。
+ *    另注：原始 mod 仓库 `PKRC/game/server/dist/` 跟踪了 `manifest.webmanifest`
+ *    `starter-colors.json` `service-worker.js` `exp-sprites.json` 但**未**跟踪 `logo*`。
+ *
+ * ⚠️⚠️ `locales` 的双源冲突（2026-10-16 实测，**必须提请决策**）：
+ *
+ *    上游插件把 `<root>/locales`（locales 子模块）minify 进 `dist/locales`；
+ *    而 mod 发行版里那份 `dist/locales` 是**另一棵树**。实测差异：
+ *
+ *      | 来源 | 文件数 | 语言目录命名 |
+ *      |---|---|---|
+ *      | 构建产物（锚点 locales 子模块） | **1737** | `ca` / `es-419` …（上游 main 命名） |
+ *      | 资产源（mod 发行版）            | **1138** | `ca-ES` / …（旧版上游命名） |
+ *
+ *    两者**语言目录名都不同**（`ca` vs `ca-ES`）⇒ 不是版本新旧问题，是**两套命名**。
+ *    谁正确取决于「迁移后的代码找的是哪套 key」，这属于 **A4/A5 的功能等价判定**，
+ *    不是后端能单方面决定的。
+ *
+ *    ⇒ 本管线的处置：**默认 prefer = 资产源**（= 保持当前发行版内容不变），
+ *      并在 `merge` 时**大声告警**；要改成构建产物必须显式 `--locales-from=build`。
+ *      这样 B-9 不会**静默**改变运行期内容（第四阶段的纪律：不引入未验证变更）。
+ */
+const RESOURCE_CLASSES = [
+  {
+    id: "assets",
+    kind: "build",
+    type: "dir",
+    required: true,
+    minFiles: 3,
+    desc: "JS/CSS 构建产物（文件名带内容 hash）",
+    reason: "每次构建都变，只能来自构建产物",
+  },
+  {
+    id: "index.html",
+    kind: "build",
+    type: "file",
+    required: true,
+    minBytes: 500,
+    desc: "入口页（引用 assets/ 下带 hash 的文件）",
+    reason: "构建期生成，引用带 hash 的 bundle",
+  },
+  {
+    id: "locales",
+    kind: "both",
+    type: "dir",
+    required: true,
+    minFiles: 100,
+    // ⚠️ 保守默认 = 资产源。理由见下方「locales 的双源冲突」注释块。
+    prefer: "asset",
+    desc: "i18n JSON（构建期由 locales 子模块 minify 而来）",
+    reason: "构建产物与资产源**结构性不同**（见文档 §locales 双源冲突），默认不替换运行期内容",
+  },
+  {
+    id: "images",
+    kind: "asset",
+    type: "dir",
+    required: true,
+    minFiles: 1000,
+    desc: "精灵贴图 / atlas / palette",
+    reason: "assets 子模块内容，构建不生成",
+  },
+  {
+    id: "audio",
+    kind: "asset",
+    type: "dir",
+    required: true,
+    minFiles: 100,
+    desc: "BGM / 音效",
+    reason: "assets 子模块内容，构建不生成",
+  },
+  {
+    id: "battle-anims",
+    kind: "asset",
+    type: "dir",
+    required: true,
+    minFiles: 10,
+    desc: "战斗动画 JSON",
+    reason: "assets 子模块内容，构建不生成",
+  },
+  {
+    id: "fonts",
+    kind: "asset",
+    type: "dir",
+    required: true,
+    minFiles: 2,
+    desc: "字体",
+    reason: "assets 子模块内容，构建不生成",
+  },
+  {
+    id: "manifest.webmanifest",
+    kind: "asset",
+    type: "file",
+    required: true,
+    desc: "PWA manifest（引用 logo128 / logo512）",
+    reason: "非构建产出（见上方「来源归属的诚实标注」）",
+  },
+  {
+    id: "logo128.png",
+    kind: "asset",
+    type: "file",
+    required: true,
+    desc: "PWA 图标 128×128",
+    reason: "同上",
+  },
+  {
+    id: "logo512.png",
+    kind: "asset",
+    type: "file",
+    required: true,
+    desc: "PWA 图标 512×512",
+    reason: "同上",
+  },
+  {
+    id: "starter-colors.json",
+    kind: "asset",
+    type: "file",
+    required: true,
+    desc: "初始宝可梦配色表（运行时读取）",
+    reason: "assets 子模块内容",
+  },
+  {
+    id: "exp-sprites.json",
+    kind: "asset",
+    type: "file",
+    required: true,
+    desc: "经验条精灵坐标表（asset-tooling 产物）",
+    reason: "assets 子模块内容",
+  },
+  {
+    id: "service-worker.js",
+    kind: "mod",
+    type: "file",
+    required: true,
+    desc: "Service Worker（PKRC 自有，仅 install 钩子）",
+    reason: "上游 assets 子模块与锚点树根都没有，属魔改自有",
+  },
+  {
+    id: "pkrc",
+    kind: "mod",
+    type: "dir",
+    required: true,
+    minFiles: 1,
+    desc: "PKRC 输入层配置（pkrc/config/input-config.json）",
+    reason: "魔改自有，F-6/F-10 的输入层依赖它",
+  },
+];
+
+/** 允许出现在 dist 根、但不属于任何资源类的文件（占位符与已知工具残留） */
+const ALLOWED_EXTRA_TOP = [
+  ".gitkeep", // 占位符（0 字节正常）
+  "update-source-comments.py", // 已知上游工具脚本残留（B-3 已登记）
+];
+
+/**
+ * locales 语言目录**别名表**：mod 发行版命名 → 上游现行命名。
+ *
+ * 依据（不是猜的）：锚点树 `src/i18n.ts` 的 `supportedLngs` 明确列的是
+ * `zh-Hans` / `zh-Hant` / `ca`，而语言的设置项
+ * （`src/system/settings/settings-language.ts`）也是
+ * `changeLocaleHandler("zh-Hans")` / `("zh-Hant")`。
+ * 而 mod 发行的 locales 目录是 `zh-CN` / `zh-TW` / `ca-ES`。
+ *
+ * ⇒ 这三对是**同一语言在两套命名下的名字**，不是不同语言。
+ *   只有实测确认的才放进这张表 —— 不做猜测性映射。
+ */
+const LOCALE_ALIAS = {
+  "zh-CN": "zh-Hans",
+  "zh-TW": "zh-Hant",
+  "ca-ES": "ca",
+};
+
+/** 按 id 取资源类定义 */
+function classSpec(id) {
+  for (const c of RESOURCE_CLASSES) if (c.id === id) return c;
+  return null;
+}
+
+/**
+ * 统计某一个资源类在给定根目录下的实际规模。
+ * 文件类与目录类分开处理：对文件调 `measure()` 会因 `readdirSync` 抛错而返回 0。
+ *
+ * @param {string} root   dist 根目录
+ * @param {object} spec   RESOURCE_CLASSES 的一项
+ * @returns {{present:boolean, files:number, bytes:number, zero:number, ok:boolean, failReason:string|null}}
+ */
+function measureClass(root, spec) {
+  const full = path.join(root, spec.id);
+  if (!fs.existsSync(full)) {
+    return { present: false, files: 0, bytes: 0, zero: 0, ok: false, failReason: "缺失" };
+  }
+  let files = 0;
+  let bytes = 0;
+  let zero = 0;
+  if (spec.type === "file") {
+    let st;
+    try {
+      st = fs.statSync(full);
+    } catch (err) {
+      return { present: false, files: 0, bytes: 0, zero: 0, ok: false, failReason: `stat 失败：${err.message}` };
+    }
+    if (!st.isFile()) {
+      return { present: true, files: 0, bytes: 0, zero: 0, ok: false, failReason: "类型不符（期望文件）" };
+    }
+    files = 1;
+    bytes = st.size;
+    zero = st.size === 0 ? 1 : 0;
+  } else {
+    const m = measure(full);
+    files = m.files;
+    bytes = m.bytes;
+    zero = m.zero.length;
+  }
+
+  let ok = true;
+  let failReason = null;
+  if (files === 0) {
+    ok = false;
+    failReason = "存在但为空";
+  } else if (spec.type === "file" && bytes === 0) {
+    // 单个文件类出现零字节 = 明确的损伤（拷贝事故的典型痕迹），直接判不合格
+    ok = false;
+    failReason = "零字节文件";
+  } else if (spec.type === "dir" && Number.isFinite(spec.minFiles) && files < spec.minFiles) {
+    ok = false;
+    failReason = `文件数 ${files} < 下限 ${spec.minFiles}（半成品）`;
+  } else if (spec.type === "file" && Number.isFinite(spec.minBytes) && bytes < spec.minBytes) {
+    ok = false;
+    failReason = `字节数 ${bytes} < 下限 ${spec.minBytes}（疑似截断）`;
+  }
+  return { present: true, files, bytes, zero, ok, failReason };
+}
+
 
 // ---------------------------------------------------------------------------
 // 参数
@@ -429,19 +692,25 @@ async function cmdVerify() {
     out(`  ❌ ${msg}`);
   };
 
-  // ① 顶层结构
-  out("[1/6] 顶层目录结构");
-  for (const d of EXPECTED_TOP) {
-    const full = path.join(dist, d);
-    if (!fs.existsSync(full)) {
-      fail(`缺少目录 ${d}/`);
-      continue;
+  // ① 顶层结构（B-9：改为由 RESOURCE_CLASSES 表驱动，覆盖全部 14 类）
+  //
+  // 为什么不再用写死的 EXPECTED_TOP：那只有 6 个目录，会漏掉
+  // pkrc / logo* / manifest.webmanifest / starter-colors.json / exp-sprites.json
+  // / service-worker.js —— 而这几个恰恰是 A5-01 §2.4 限制 #1 点名要求「就位」的。
+  // 一个漏检的校验器比没有校验器更危险（会给出虚假的「通过」）。
+  out("[1/6] 顶层资源类（RESOURCE_CLASSES 表驱动）");
+  let classBad = 0;
+  for (const spec of RESOURCE_CLASSES) {
+    const m = measureClass(dist, spec);
+    if (!m.ok) {
+      classBad++;
+      fail(`${spec.id}（${spec.kind}）：${m.failReason}`);
+    } else {
+      const size = spec.type === "dir" ? `${m.files} 文件  ${(m.bytes / 1048576).toFixed(1)} MB` : `${m.bytes} B`;
+      out(`  ✅ ${spec.id.padEnd(24)} ${spec.kind.padEnd(6)} ${size}`);
     }
-    const m = measure(full);
-    const min = MIN_FILES[d] || 1;
-    if (m.files < min) fail(`${d}/ 文件数 ${m.files} < 预期下限 ${min}（可能是半成品）`);
-    else out(`  ✅ ${d}/  ${m.files} 文件  ${(m.bytes / 1048576).toFixed(1)} MB`);
   }
+  out(`  —— ${RESOURCE_CLASSES.length} 类中 ${RESOURCE_CLASSES.length - classBad} 类就位`);
 
   // ② index.html 与 manifest 的字面量引用
   out("[2/6] 静态字面量引用（index.html / manifest.webmanifest）");
@@ -538,7 +807,7 @@ async function cmdVerify() {
   // ⑤ 顶层异常文件（不应出现在 dist 根的构建/工具残留）
   out("[5/6] 顶层异常文件");
   const unexpected = [];
-  const allowed = new Set([".gitkeep", "index.html", "manifest.webmanifest", "service-worker.js", "logo128.png", "logo512.png", "exp-sprites.json", "starter-colors.json", "update-source-comments.py"]);
+  const allowed = new Set(ALLOWED_EXTRA_TOP.concat(RESOURCE_CLASSES.filter((c) => c.type === "file").map((c) => c.id)));
   for (const e of fs.readdirSync(dist, { withFileTypes: true })) {
     if (e.isFile() && !allowed.has(e.name)) unexpected.push(e.name);
   }
@@ -659,6 +928,733 @@ async function cmdSnapshot() {
 }
 
 // ---------------------------------------------------------------------------
+// B-9 · merge：「构建产物 + 资产源」合并管线
+// ---------------------------------------------------------------------------
+/**
+ * 两种模式，语义严格不同：
+ *
+ *   --mode=replace（默认）—— 组装一份**新的** dist（B-7 发布脚本的组装步）
+ *     · 每个类都从「该类的来源根」整份覆盖到目标
+ *     · 目录类**先删后拷**：`assets/` 的文件名带 hash，不删会残留旧 hash，
+ *       导致 `index.html` 引用与磁盘内容不一致、排查困难
+ *     · 护栏：目标已存在且非空时必须显式 `--force-replace`
+ *       （防止误把运行中的 dist 当暂存目录）
+ *
+ *   --mode=fill —— **就地补全**（A5-01b 的资源补全步）
+ *     · 只补**缺失**的文件，**从不覆盖、从不删除** → 天然幂等、无需回滚
+ *     · 只处理 kind 为 asset / mod 的类；`build` 类（assets/ index.html）拒绝，
+ *       因为构建产物必须来自构建，不能靠拷贝
+ *     · 资产源缺省 = 目标自身（就地自查自补）
+ *
+ * 默认 dry-run；要落盘必须显式 `--commit`。这与 B-3 `assemble` 的约定一致：
+ * 破坏性工具必须「显式确认」。
+ */
+async function cmdMerge() {
+  const toRaw = opt("--to") || DEFAULT_DIST;
+  const to = path.resolve(toRaw);
+  const modeRaw = (opt("--mode") || (flag("--fill") ? "fill" : "replace")).toLowerCase();
+  const commit = flag("--commit");
+  const wantJson = flag("--json");
+  const force = flag("--force-replace");
+  const onlyRaw = opt("--only");
+  const only = onlyRaw
+    ? onlyRaw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : null;
+
+  if (modeRaw !== "replace" && modeRaw !== "fill") {
+    out(`❌ 未知 --mode=${modeRaw}（可用：replace / fill）`);
+    process.exitCode = 2;
+    return;
+  }
+
+  const buildDir = opt("--build-dir") ? path.resolve(opt("--build-dir")) : null;
+  const assetSrcRaw = opt("--asset-source");
+  const assetSrc = assetSrcRaw ? path.resolve(assetSrcRaw) : modeRaw === "fill" ? to : null;
+  /** locales 双源策略覆盖（见文件头「locales 的双源冲突」） */
+  const localesFrom = opt("--locales-from") ? String(opt("--locales-from")).toLowerCase() : null;
+  /** locales 冲突胜者：overlay=保留 mod 文本（默认，见 unionLocales 注释）；base=采用上游较新文案 */
+  const localeConflict = opt("--locale-conflict") ? String(opt("--locale-conflict")).toLowerCase() : "overlay";
+
+  const errors = [];
+  const fail = (m) => errors.push(m);
+  const warnings = [];
+
+  if (localesFrom && !["build", "asset", "union"].includes(localesFrom)) {
+    fail(`--locales-from 只能是 build / asset / union（收到 ${localesFrom}）`);
+  }
+  if (!["overlay", "base"].includes(localeConflict)) {
+    fail(`--locale-conflict 只能是 overlay / base（收到 ${localeConflict}）`);
+  }
+
+  // ---- 预检 --------------------------------------------------------------
+  if (modeRaw === "replace") {
+    if (!buildDir) fail("--mode=replace 必须给 --build-dir=<构建产物目录>");
+    else if (!fs.existsSync(path.join(buildDir, "index.html"))) fail(`--build-dir 缺少 index.html：${buildDir}`);
+    else if (!fs.existsSync(path.join(buildDir, "assets"))) fail(`--build-dir 缺少 assets/：${buildDir}`);
+    if (!assetSrc) fail("--mode=replace 必须给 --asset-source=<资产源目录>");
+    if (assetSrc && !fs.existsSync(assetSrc)) fail(`--asset-source 不存在：${assetSrc}`);
+    if (fs.existsSync(to)) {
+      let population = 0;
+      try {
+        population = fs.readdirSync(to).length;
+      } catch {
+        /* ignore */
+      }
+      if (population > 0 && !force) {
+        fail(
+          `目标已存在且非空（${population} 项）：${to}\n` +
+            "    replace 模式会**删除并整体覆盖**目录类。若确认这就是暂存目录，请加 --force-replace；\n" +
+            "    若想就地补全现有 dist，请改用 --mode=fill。",
+        );
+      }
+    }
+  } else {
+    if (!fs.existsSync(to)) fail(`--mode=fill 的目标必须已存在：${to}`);
+    if (assetSrc && !fs.existsSync(assetSrc)) fail(`--asset-source 不存在：${assetSrc}`);
+    if (buildDir) fail("--mode=fill 不接受 --build-dir（构建产物必须经由构建产出，不能拷贝补全）");
+  }
+
+  const selected = RESOURCE_CLASSES.filter((c) => (only ? only.includes(c.id) : true));
+  if (only) {
+    const unknown = only.filter((id) => !classSpec(id));
+    if (unknown.length) fail(`--only 含未知资源类：${unknown.join(", ")}`);
+  }
+  if (only && modeRaw === "fill") {
+    const buildIds = selected.filter((c) => c.kind === "build").map((c) => c.id);
+    if (buildIds.length) fail(`--mode=fill 不能处理构建产物类：${buildIds.join(", ")}`);
+  }
+
+  // ---- 制定计划 ----------------------------------------------------------
+  const plan = [];
+  for (const spec of selected) {
+    const row = { id: spec.id, kind: spec.kind, type: spec.type, desc: spec.desc };
+
+    if (modeRaw === "fill" && spec.kind === "build") {
+      row.action = "reject";
+      row.note = "构建产物，fill 模式不处理";
+      plan.push(row);
+      continue;
+    }
+    if (modeRaw === "fill" && spec.kind === "both") {
+      row.action = "reject";
+      row.note = "构建产物优先，fill 模式不处理";
+      plan.push(row);
+      continue;
+    }
+
+    // 选源根
+    let srcRoot = null;
+    if (spec.kind === "build") srcRoot = buildDir;
+    else if (spec.kind === "asset" || spec.kind === "mod") srcRoot = assetSrc;
+    else if (spec.kind === "both") {
+      // 双源类（目前只有 locales）：由 spec.prefer + 显式覆盖决定
+      const override = spec.id === "locales" ? localesFrom : null;
+      const prefer = override || spec.prefer || "build";
+      const buildHas = !!buildDir && fs.existsSync(path.join(buildDir, spec.id));
+      const assetHas = !!assetSrc && fs.existsSync(path.join(assetSrc, spec.id));
+      srcRoot = prefer === "asset" ? (assetHas ? assetSrc : buildHas ? buildDir : null) : buildHas ? buildDir : assetHas ? assetSrc : null;
+      row.sourceChoice = prefer;
+      row.bothAvailable = buildHas && assetHas;
+    }
+
+    row.srcRoot = srcRoot;
+    if (!srcRoot) {
+      row.action = "missing-source";
+      row.note = "未提供来源根";
+      plan.push(row);
+      continue;
+    }
+    const srcPath = path.join(srcRoot, spec.id);
+    const dstPath = path.join(to, spec.id);
+    row.src = srcPath;
+    row.dst = dstPath;
+
+    if (!fs.existsSync(srcPath)) {
+      row.action = "missing-source";
+      row.note = "来源根下不存在";
+      plan.push(row);
+      continue;
+    }
+    // 同路径（就地补全：源=目标）→ 无可做
+    if (path.resolve(srcPath) === path.resolve(dstPath)) {
+      row.action = "same-path";
+      row.note = "源与目标同一路径（就地模式）";
+      plan.push(row);
+      continue;
+    }
+    row.action = modeRaw === "replace" ? "replace" : "fill";
+
+    // locales + union：不是「拷贝某一个源」，而是「两源合成」
+    if (spec.id === "locales" && localesFrom === "union") {
+      if (modeRaw === "fill") {
+        row.action = "reject";
+        row.note = "union 需要写整棵树，fill 模式不处理";
+      } else if (!buildDir || !assetSrc) {
+        row.action = "missing-source";
+        row.note = "union 需要同时提供 --build-dir 与 --asset-source";
+      } else {
+        row.action = "union";
+        row.src = path.join(buildDir, spec.id) + "  ⊕  " + path.join(assetSrc, spec.id);
+        row.dst = path.join(to, spec.id);
+        row.note = "基座=构建产物，overlay=资产源，key 级并集";
+      }
+    }
+
+    // 双源类的**结构性告警**：不做静默替换。
+    if (row.bothAvailable && row.sourceChoice === "asset" && !localesFrom) {
+      const dl = compareLocaleTrees(path.join(buildDir, spec.id), path.join(assetSrc, spec.id));
+      if (dl.differs) {
+        warnings.push(
+          `${spec.id} 在「构建产物」与「资产源」两处**结构不同** → 本次采用【资产源】（保持发行版现状）。\n` +
+            `      构建产物：${dl.buildFiles} 文件，语言目录 ${dl.buildLangs} 个（${dl.buildSample}）\n` +
+            `      资产源　：${dl.assetFiles} 文件，语言目录 ${dl.assetLangs} 个（${dl.assetSample}）\n` +
+            `      仅构建产物有：${dl.onlyBuildLangs.join(", ") || "（无）"}\n` +
+            `      仅资产源有　：${dl.onlyAssetLangs.join(", ") || "（无）"}\n` +
+            `      ⇒ 两棵树**都不完整**（详见 docs/sourcemigration/B-9-资源补全管线.md §locales）。\n` +
+            `        当前代码来自锚点，supportedLngs 用的是 ${dl.buildLangs} 个目录那套命名；\n` +
+            `        而 mod 自有文本（talent* 等命名空间与上千条 key）只在资产源里。\n` +
+            `        推荐：--locales-from=union（基座=构建产物 + overlay=资产源，key 级并集）\n` +
+            `        该选择会**改变运行期内容**，须由 A4/A5 裁定并留走查证据。`,
+        );
+      }
+    }
+    plan.push(row);
+  }
+
+  // ---- 输出计划 ----------------------------------------------------------
+  if (!wantJson) {
+    out("PKRC 资源合并管线（B-9）");
+    out("=".repeat(68));
+    out(`目标：${to}`);
+    out(`模式：${modeRaw}${commit ? "（--commit，将落盘）" : "（dry-run）"}`);
+    if (buildDir) out(`构建产物：${buildDir}`);
+    if (assetSrc) out(`资产源：${assetSrc}${!assetSrcRaw && modeRaw === "fill" ? "（缺省=目标自身）" : ""}`);
+    out("");
+  }
+  if (errors.length) {
+    if (!wantJson) {
+      out("❌ 预检未通过：");
+      for (const e of errors) out(`   · ${e}`);
+    } else {
+      out(JSON.stringify({ ok: false, mode: modeRaw, error: "preflight", errors }, null, 2));
+    }
+    process.exitCode = 2;
+    return;
+  }
+
+  if (!wantJson) {
+    out("计划：");
+    for (const r of plan) {
+      const tag =
+        r.action === "same-path"
+          ? "＝ 就地（源即目标）"
+          : r.action === "missing-source"
+            ? "⚠ 无来源"
+            : r.action === "reject"
+              ? "— 跳过"
+              : r.action === "replace"
+                ? "→ 整体覆盖"
+                : r.action === "union"
+                  ? "⊕ 两源并集"
+                  : "＋ 仅补缺失";
+      out(`  ${r.id.padEnd(22)} ${tag.padEnd(18)} ${r.note || ""}${r.sourceChoice ? `  [源=${r.sourceChoice}]` : ""}`);
+    }
+    out("");
+    if (warnings.length) {
+      out("⚠️ 告警（不中止，但必须由人裁定）：");
+      for (const w of warnings) out(`  · ${w}`);
+      out("");
+    }
+  }
+
+  // ---- 执行 --------------------------------------------------------------
+  const done = [];
+  for (const r of plan) {
+    if (r.action !== "replace" && r.action !== "fill" && r.action !== "union") continue;
+    if (!commit) {
+      done.push({ id: r.id, action: r.action, applied: false });
+      continue;
+    }
+    try {
+      if (r.action === "replace") {
+        fs.rmSync(r.dst, { recursive: true, force: true });
+        fs.mkdirSync(path.dirname(r.dst), { recursive: true });
+        fs.cpSync(r.src, r.dst, { recursive: true });
+        done.push({ id: r.id, action: "replace", applied: true });
+        if (!wantJson) out(`  ✅ ${r.id} 已覆盖`);
+      } else if (r.action === "union") {
+        const stats = unionLocales(path.join(buildDir, r.id), path.join(assetSrc, r.id), r.dst, { conflict: localeConflict });
+        done.push({ id: r.id, action: "union", applied: true, stats });
+        if (!wantJson) {
+          out(`  ✅ ${r.id} 并集完成：${stats.langs} 语言 / ${stats.files} 文件`);
+          out(`     基座侧独有 key 补入 ${stats.fromBase} 条；overlay（mod）侧独有 key 补入 ${stats.fromOverlay} 条`);
+          out(`     两侧同 key 不同值 ${stats.conflicts} 处 → 【${stats.conflictWinner === "overlay" ? "保留 mod 文本" : "采用上游文案"}】`);
+          out(`     逐语言明细见 --json（stats.perLang）`);
+        }
+      } else {
+        const added = copyMissing(r.src, r.dst);
+        done.push({ id: r.id, action: "fill", applied: true, added });
+        if (!wantJson) out(`  ✅ ${r.id} 补齐 ${added} 个缺失文件`);
+      }
+    } catch (err) {
+      done.push({ id: r.id, action: r.action, applied: false, error: err.message });
+      if (!wantJson) out(`  ❌ ${r.id} 失败：${err.message}`);
+      process.exitCode = 1;
+    }
+  }
+
+  // ---- 合并后自检 --------------------------------------------------------
+  // ⚠️ 只自检**本次选中**的类：带 --only 时若仍按全表报「缺失」，会把
+  //    「你本来就没让它处理」误报成「合并失败」。范围外的类单独说明。
+  let check = null;
+  const outOfScope = RESOURCE_CLASSES.filter((c) => !selected.includes(c)).map((c) => c.id);
+  if (commit && fs.existsSync(to)) {
+    check = selected.map((spec) => {
+      const m = measureClass(to, spec);
+      return { id: spec.id, ok: m.ok, files: m.files, failReason: m.failReason };
+    });
+    const bad = check.filter((c) => !c.ok);
+    if (!wantJson) {
+      out("");
+      out(`合并后自检（本次选中 ${check.length} 类）：${check.length - bad.length}/${check.length} 类就位`);
+      for (const b of bad) out(`  ❌ ${b.id}：${b.failReason}`);
+      if (outOfScope.length) out(`  ℹ️ 范围外未检查：${outOfScope.join(", ")}`);
+      if (bad.length) {
+        out("  ℹ️ 缺的类若属于「资产源本身没有」，说明资产源不完整 —— 需先补资产源。");
+      }
+    }
+    if (bad.length) process.exitCode = 1;
+  }
+
+  if (wantJson) {
+    out(
+      JSON.stringify(
+        {
+          ok: errors.length === 0 && (process.exitCode || 0) === 0,
+          mode: modeRaw,
+          commit,
+          to,
+          selected: selected.map((c) => c.id),
+          outOfScope,
+          warnings,
+          plan,
+          done,
+          check,
+        },
+        null,
+        2,
+      ),
+    );
+  } else {
+    out("");
+    if (!commit) out("（dry-run，未落盘。加 --commit 执行）");
+    // 就地模式的实用提示：缺省源 = 目标自身 ⇒ 永远没有可补的东西，
+    // 只能当「自检」。要真补，必须给一个**另一份**资产源（如原始 mod 发行目录）。
+    if (modeRaw === "fill" && !assetSrcRaw) {
+      out("ℹ️ fill 模式未给 --asset-source：源=目标自身，只能自检、无从补起。");
+      out("   要真正补全，请指向**另一份**资产源，例如原始发行目录：");
+      out("   --asset-source=<含 images/audio/fonts/... 的目录>");
+    }
+  }
+}
+
+/**
+ * 比较两棵 locales 树的**结构**（不比对内容）。
+ *
+ * 只取「文件数 + 顶层语言目录名集合」两个维度 —— 这正是实测发现的差异所在
+ * （1737 文件 / `ca` vs 1138 文件 / `ca-ES`）。逐文件 diff 会淹没在
+ * minify 与行尾差异里，反而看不清「两套命名」这个真正的问题。
+ *
+ * @returns {{differs:boolean, buildFiles:number, assetFiles:number,
+ *            buildLangs:number, assetLangs:number,
+ *            onlyBuildLangs:string[], onlyAssetLangs:string[],
+ *            buildSample:string, assetSample:string}}
+ */
+function compareLocaleTrees(buildLocales, assetLocales) {
+  const langs = (root) => {
+    if (!fs.existsSync(root)) return [];
+    return fs
+      .readdirSync(root, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+      .map((e) => e.name)
+      .sort();
+  };
+  const bl = langs(buildLocales);
+  const al = langs(assetLocales);
+  const bSet = new Set(bl);
+  const aSet = new Set(al);
+  const bFiles = fs.existsSync(buildLocales) ? measure(buildLocales).files : 0;
+  const aFiles = fs.existsSync(assetLocales) ? measure(assetLocales).files : 0;
+  const onlyBuildLangs = bl.filter((x) => !aSet.has(x));
+  const onlyAssetLangs = al.filter((x) => !bSet.has(x));
+  return {
+    differs: bFiles !== aFiles || onlyBuildLangs.length > 0 || onlyAssetLangs.length > 0,
+    buildFiles: bFiles,
+    assetFiles: aFiles,
+    buildLangs: bl.length,
+    assetLangs: al.length,
+    onlyBuildLangs,
+    onlyAssetLangs,
+    buildSample: bl.slice(0, 6).join(" "),
+    assetSample: al.slice(0, 6).join(" "),
+  };
+}
+
+/**
+ * locales **并集**构建：以「构建产物（锚点）」为基座，把 mod 发行版独有的内容补进来。
+ *
+ * 为什么需要它（2026-10-16 实测结论）：
+ *   两棵 locales 树**都不完整**，且缺陷互补：
+ *
+ *   | 维度 | 构建产物（锚点） | 资产源（mod 发行版） |
+ *   |---|---|---|
+ *   | 语言目录 | **28**（`zh-Hans` / `zh-Hant` / `ca`）✅ 匹配代码 | 17（`zh-CN` / `zh-TW` / `ca-ES`）❌ 不在 supportedLngs 里 |
+ *   | 共享命名空间内 mod 多出的 key | — | **en 707 / zh 968** |
+ *   | mod 独有命名空间 | — | `talent.json` `talent-codex.json` `talent-tag.json` `biome.json` |
+ *
+ *   ⇒ 只取构建产物 = **丢 4 个魔改命名空间 + 上千条魔改文本**
+ *   ⇒ 只取资产源 = **14 个受支持语言无目录**，且中文目录名代码根本不会请求
+ *   ⇒ 正解是并集：**基座用构建产物**（语言目录名对、上游文本新），
+ *      **overlay 用资产源**（补回魔改 key 与命名空间），语言目录名按 LOCALE_ALIAS 归位。
+ *
+ * 冲突策略（**默认 overlay 获胜 = 保留 mod 文本**）：
+ *
+ *   实测冲突共 5499 处，性质分三类（2026-10-16 抽样确认）：
+ *     ① **排版约定**：上游把 `\n$`（换行+分页）统一成 `$`。数量最大，纯格式。
+ *     ② **真实改写**：如 `battle.json#pokemonCaught`
+ *        anchor「太好了！捉到{{pokemonName}}了！」 vs mod「{{pokemonName}}被抓住了！」
+ *     ③ **键形变更**：上游把 i18next 扁平键 `desc_default` / `gen_1` 改成**嵌套对象**
+ *        `descDefault` / `gen:{1:…}` ⇒ 这类不是冲突，而是两边各有对方没有的 key。
+ *
+ *   ⇒ 默认 **overlay（mod）获胜** 的理由与 O-9b 直接相关：
+ *     O-9b 的判据是「以 modder 原产物为期望画面」。若让上游文本覆盖 5499 条，
+ *     A/B 对比会凭空多出海量文本差异，把真正的迁移缺陷淹没在噪声里。
+ *     保留 mod 文本 = 让 A/B 只差分**代码**造成的差异。
+ *     反过来（`--locale-conflict=base`）会让上游较新文案生效 —— 那是**产品决策**，
+ *     不是管线能替使用者定的，故不做默认。
+ *
+ * @param {string} baseDir    基座 locales（构建产物）
+ * @param {string} overlayDir overlay locales（资产源，含 mod 自有 key 与文本）
+ * @param {string} outDir     输出目录（会被整体重建）
+ * @param {object} [opts]
+ * @param {"overlay"|"base"} [opts.conflict="overlay"] 同 key 不同值时的胜者
+ * @returns {{langs:number, files:number, addedNamespaces:number,
+ *            fromOverlay:number, fromBase:number, conflicts:number,
+ *            conflictWinner:string, perLang:Array<object>}}
+ */
+function unionLocales(baseDir, overlayDir, outDir, opts = {}) {
+  const winner = opts.conflict === "base" ? "base" : "overlay";
+  const langsOf = (root) =>
+    fs.existsSync(root)
+      ? fs
+          .readdirSync(root, { withFileTypes: true })
+          .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+          .map((e) => e.name)
+      : [];
+  const readNs = (root, lang) => {
+    const d = path.join(root, lang);
+    const m = new Map();
+    if (!fs.existsSync(d)) return m;
+    for (const f of fs.readdirSync(d)) {
+      if (!f.endsWith(".json")) continue;
+      try {
+        m.set(f, JSON.parse(fs.readFileSync(path.join(d, f), "utf8")));
+      } catch {
+        /* 坏 JSON 跳过（归零字节/解析检测管） */
+      }
+    }
+    return m;
+  };
+
+  const baseLangs = langsOf(baseDir);
+  const overlayLangs = langsOf(overlayDir);
+  /** 目标语言集合 = 基座语言 ∪ (overlay 语言经别名归位) */
+  const targetLangs = new Set(baseLangs);
+  for (const l of overlayLangs) targetLangs.add(LOCALE_ALIAS[l] || l);
+
+  fs.rmSync(outDir, { recursive: true, force: true });
+  fs.mkdirSync(outDir, { recursive: true });
+
+  const stat = { langs: 0, files: 0, addedNamespaces: 0, fromOverlay: 0, fromBase: 0, conflicts: 0, conflictWinner: winner, perLang: [] };
+
+  for (const lang of [...targetLangs].sort()) {
+    // 反查该目标语言在 overlay 里对应的源语言名（可能多对一，取第一个命中）
+    const overlayLang = overlayLangs.includes(lang) ? lang : overlayLangs.find((l) => LOCALE_ALIAS[l] === lang);
+    const baseNs = readNs(baseDir, lang);
+    const overNs = overlayLang ? readNs(overlayDir, overlayLang) : new Map();
+    const nsNames = new Set([...baseNs.keys(), ...overNs.keys()]);
+
+    const outLangDir = path.join(outDir, lang);
+    fs.mkdirSync(outLangDir, { recursive: true });
+    let fromOverlay = 0;
+    let fromBase = 0;
+    let conflicts = 0;
+
+    for (const ns of nsNames) {
+      const b = baseNs.get(ns);
+      const o = overNs.get(ns);
+      let merged;
+      if (b && o) {
+        // 两侧都有：先放「胜者」，再把败者独有的 key 补进来（key 级并集）
+        const win = winner === "base" ? b : o;
+        const lose = winner === "base" ? o : b;
+        merged = Object.assign({}, win);
+        for (const k of Object.keys(lose)) {
+          if (!(k in merged)) {
+            merged[k] = lose[k];
+            if (winner === "base") fromOverlay++;
+            else fromBase++;
+          } else if (JSON.stringify(merged[k]) !== JSON.stringify(lose[k])) {
+            conflicts++; // 胜者保留，计数留痕
+          }
+        }
+      } else if (b) {
+        merged = b;
+        fromBase += Object.keys(b).length;
+      } else {
+        merged = o;
+        fromOverlay += Object.keys(o).length;
+        stat.addedNamespaces++;
+      }
+      fs.writeFileSync(path.join(outLangDir, ns), JSON.stringify(merged), "utf8");
+      stat.files++;
+    }
+    stat.langs++;
+    stat.fromOverlay += fromOverlay;
+    stat.fromBase += fromBase;
+    stat.conflicts += conflicts;
+    stat.perLang.push({ lang, overlayLang: overlayLang || null, fromOverlay, fromBase, conflicts });
+  }
+  return stat;
+}
+
+/**
+ * 把 src 下**目标缺失**的文件拷进 dst（从不覆盖、从不删除）。
+ * 目录类逐层递归；文件类看目标是否已存在。
+ *
+ * @returns {number} 实际拷贝的文件数
+ */
+function copyMissing(src, dst) {
+  const st = fs.statSync(src);
+  if (st.isFile()) {
+    if (fs.existsSync(dst)) return 0;
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.copyFileSync(src, dst);
+    return 1;
+  }
+  let n = 0;
+  fs.mkdirSync(dst, { recursive: true });
+  for (const e of fs.readdirSync(src, { withFileTypes: true })) {
+    n += copyMissing(path.join(src, e.name), path.join(dst, e.name));
+  }
+  return n;
+}
+
+// ---------------------------------------------------------------------------
+// B-9 · manifest：dist 清单（可存档、可比对）
+// ---------------------------------------------------------------------------
+/**
+ * 产出清单 JSON：
+ *   - `classes[]`：逐类的 kind / 类型 / 文件数 / 字节 / 零字节 / 下限 / 是否合格
+ *   - `sha256`   ：**关键文件**的 SHA256（`assets/**` 全部 + 其余文件类）；
+ *                  目录类（images/audio/…）**不做**逐文件 hash —— 那是几十万次读，
+ *                  且它们不随构建变化，用文件数+字节数足以发现损伤
+ *   - `extras[]` ：顶层非资源类文件
+ *   - `compare`  ：给了 `--compare=<旧清单>` 时，输出新增/缺失/大小变化
+ *
+ * 为什么 hash 只覆盖关键文件：B-4 §3.4 已论证 —— 758MB 全量 SHA256 约 3~8 秒虽可接受，
+ * 但发布是低频操作、清单是高频比对物；清单要能秒级生成才有比对价值。
+ */
+async function cmdManifest() {
+  const dist = path.resolve(opt("--dist") || DEFAULT_DIST);
+  const outFile = opt("--out") || null;
+  const compareFile = opt("--compare") || null;
+  const wantJson = flag("--json");
+
+  if (!fs.existsSync(dist)) {
+    out(`❌ 目录不存在：${dist}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const classes = RESOURCE_CLASSES.map((spec) => {
+    const m = measureClass(dist, spec);
+    return {
+      id: spec.id,
+      kind: spec.kind,
+      type: spec.type,
+      required: spec.required,
+      minFiles: spec.minFiles || null,
+      minBytes: spec.minBytes || null,
+      present: m.present,
+      files: m.files,
+      bytes: m.bytes,
+      zero: m.zero,
+      ok: m.ok,
+      failReason: m.failReason,
+    };
+  });
+
+  // 关键文件 SHA256：assets/** 全量 + 其余「文件类」资源
+  const sha256 = {};
+  const classIds = new Set(RESOURCE_CLASSES.map((c) => c.id));
+  for (const spec of RESOURCE_CLASSES) {
+    if (spec.type !== "file") continue;
+    const f = path.join(dist, spec.id);
+    if (!fs.existsSync(f)) continue;
+    try {
+      sha256[spec.id] = { size: fs.statSync(f).size, sha256: sha256File(f) };
+    } catch {
+      /* ignore */
+    }
+  }
+  const assetsDir = path.join(dist, "assets");
+  if (fs.existsSync(assetsDir)) {
+    for (const e of fs.readdirSync(assetsDir, { withFileTypes: true })) {
+      if (!e.isFile()) continue;
+      const f = path.join(assetsDir, e.name);
+      try {
+        sha256[`assets/${e.name}`] = { size: fs.statSync(f).size, sha256: sha256File(f) };
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  const extras = [];
+  for (const e of fs.readdirSync(dist, { withFileTypes: true })) {
+    if (!e.isFile()) continue;
+    if (classIds.has(e.name)) continue;
+    extras.push({ name: e.name, size: fs.statSync(path.join(dist, e.name)).size, allowed: ALLOWED_EXTRA_TOP.includes(e.name) });
+  }
+
+  const totals = { files: 0, bytes: 0, zero: 0 };
+  for (const c of classes) {
+    totals.files += c.files;
+    totals.bytes += c.bytes;
+    totals.zero += c.zero;
+  }
+
+  const report = {
+    tool: "tools/asset-pipeline.cjs manifest",
+    at: new Date().toISOString(),
+    dist: path.relative(REPO_ROOT, dist).replace(/\\/g, "/"),
+    classes,
+    sha256,
+    extras,
+    totals,
+    summary: {
+      classes: classes.length,
+      ok: classes.filter((c) => c.ok).length,
+      requiredMissing: classes.filter((c) => c.required && !c.ok).map((c) => c.id),
+    },
+  };
+
+  if (compareFile) {
+    report.compare = diffManifests(compareFile, report);
+  }
+
+  if (outFile) {
+    const abs = path.resolve(outFile);
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, JSON.stringify(report, null, 2), "utf8");
+    out(`✅ 清单已写入 ${abs}`);
+  }
+
+  if (wantJson) {
+    out(JSON.stringify(report, null, 2));
+  } else {
+    out("PKRC dist 清单（B-9）");
+    out("=".repeat(68));
+    out(`目标：${report.dist}`);
+    out("");
+    out("  " + "资源类".padEnd(24) + "来源".padEnd(8) + "文件数".padStart(9) + "字节".padStart(14) + "  状态");
+    for (const c of classes) {
+      out(
+        "  " +
+          c.id.padEnd(24) +
+          c.kind.padEnd(8) +
+          String(c.files).padStart(9) +
+          String(c.bytes).padStart(14) +
+          "  " +
+          (c.ok ? "✅" : `❌ ${c.failReason}`),
+      );
+    }
+    out("");
+    out(`  合计：${totals.files} 文件 / ${(totals.bytes / 1048576).toFixed(1)} MB / 零字节 ${totals.zero}`);
+    out(`  就位：${report.summary.ok}/${report.summary.classes} 类`);
+    out(`  关键文件 SHA256：${Object.keys(sha256).length} 个`);
+    if (extras.length) {
+      out("");
+      out("  顶层非资源类文件：");
+      for (const x of extras) out(`    ${x.allowed ? "ℹ️ 已知" : "⚠️ 未登记"}  ${x.name}  ${x.size} B`);
+    }
+    if (report.compare) {
+      out("");
+      out(`比对基线：${report.compare.baseline}`);
+      out(`  类级：新增 ${report.compare.classesAdded.length} · 缺失 ${report.compare.classesMissing.length}`);
+      out(`  关键文件：新增 ${report.compare.filesAdded.length} · 缺失 ${report.compare.filesMissing.length} · 变更 ${report.compare.filesChanged.length}`);
+      for (const f of report.compare.filesChanged.slice(0, 10)) out(`    ~ ${f}`);
+    }
+    if (report.summary.requiredMissing.length) {
+      out("");
+      out(`❌ 必需资源类未就位：${report.summary.requiredMissing.join(", ")}`);
+      process.exitCode = 1;
+    }
+  }
+}
+
+function sha256File(file) {
+  return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+}
+
+/** 比对两份清单（旧 → 新），只报「类」「关键文件」两级差异 */
+function diffManifests(baselinePath, current) {
+  const result = {
+    baseline: path.relative(REPO_ROOT, path.resolve(baselinePath)).replace(/\\/g, "/"),
+    classesAdded: [],
+    classesMissing: [],
+    classesChanged: [],
+    filesAdded: [],
+    filesMissing: [],
+    filesChanged: [],
+  };
+  let base = null;
+  try {
+    base = JSON.parse(fs.readFileSync(path.resolve(baselinePath), "utf8"));
+  } catch (err) {
+    result.error = `基线不可读：${err.message}`;
+    return result;
+  }
+
+  const bc = new Map((base.classes || []).map((c) => [c.id, c]));
+  const cc = new Map(current.classes.map((c) => [c.id, c]));
+  for (const [id, c] of cc) {
+    if (!bc.has(id)) {
+      result.classesAdded.push(id);
+      continue;
+    }
+    const b = bc.get(id);
+    if (b.files !== c.files || b.bytes !== c.bytes) {
+      result.classesChanged.push({ id, files: [b.files, c.files], bytes: [b.bytes, c.bytes] });
+    }
+  }
+  for (const id of bc.keys()) if (!cc.has(id)) result.classesMissing.push(id);
+
+  const bs = base.sha256 || {};
+  const cs = current.sha256;
+  for (const k of Object.keys(cs)) {
+    if (!(k in bs)) result.filesAdded.push(k);
+    else if (bs[k].sha256 !== cs[k].sha256) result.filesChanged.push(k);
+  }
+  for (const k of Object.keys(bs)) if (!(k in cs)) result.filesMissing.push(k);
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // 入口
 // ---------------------------------------------------------------------------
 /**
@@ -671,12 +1667,22 @@ async function cmdSnapshot() {
  */
 module.exports = {
   measure,
+  measureClass,
   checkSpritePairs,
+  copyMissing,
+  compareLocaleTrees,
+  unionLocales,
+  diffManifests,
+  sha256File,
   parseOpt: opt,
   parseFlag: flag,
   EXPECTED_TOP,
   MIN_FILES,
   UPSTREAM,
+  RESOURCE_CLASSES,
+  ALLOWED_EXTRA_TOP,
+  LOCALE_ALIAS,
+  classSpec,
 };
 
 // 只有作为主模块运行时才执行 CLI；被 require 时只导出函数
@@ -691,6 +1697,10 @@ if (require.main === module) {
         return await cmdAssemble();
       case "snapshot":
         return await cmdSnapshot();
+      case "merge":
+        return await cmdMerge();
+      case "manifest":
+        return await cmdManifest();
       case "help":
       case "--help":
       case "-h":
@@ -699,19 +1709,31 @@ if (require.main === module) {
           "",
           "子命令：",
           "  probe                         探测上游 pokerogue-assets 可用性与拉取预估",
-          "  verify [--dist=<dir>]         降级路径：资产结构与引用完整性校验",
+          "  verify [--dist=<dir>]         降级路径：14 类资源 + 引用 + 零字节完整性校验",
           "  assemble --from=<dir> [--to=<dir>] [--write]",
           "                                 从来源目录组装资产（默认 dry-run）",
           "  snapshot [--dist=<dir>] [--out=<file>]",
           "                                 产出资产快照，供增量比对",
           "",
+          "  ---- B-9（第四阶段）----",
+          "  merge --build-dir=<dir> --asset-source=<dir> --to=<dir> [--commit] [--force-replace]",
+          "        [--mode=replace|fill] [--only=a,b] [--locales-from=build|asset|union] [--json]",
+          "                                 「构建产物 + 资产源」合并管线（默认 dry-run）",
+          "                                 replace = 整体覆盖（发布前组装，需 --force-replace 才允许覆盖非空目标）",
+          "                                 fill    = 只补缺失、不覆盖不删除（A5-01b 就地补全）",
+          "                                 --locales-from 默认 asset（保持发行版现状，会告警）；",
+          "                                   union = 基座用构建产物 + overlay 用资产源做 key 级并集（推荐）",
+          "                                 --locale-conflict=overlay|base（默认 overlay=保留 mod 文本，见文档）",
+          "  manifest [--dist=<dir>] [--out=<file>] [--compare=<旧清单>] [--json]",
+          "                                 dist 清单：逐类规模 + 关键文件 SHA256（可比对）",
+          "",
           "参数写法：--key=value 与 --key value 均可。",
           "",
-          "背景与结论：见 docs/delegation/17-B3-资产管线报告.md",
+          "背景与结论：见 docs/delegation/17-B3-资产管线报告.md · docs/sourcemigration/B-9-资源补全管线.md",
         ].join("\n"));
         return;
       default:
-        out(`未知子命令：${cmd}（可用：probe / verify / assemble / snapshot / help）`);
+        out(`未知子命令：${cmd}（可用：probe / verify / assemble / snapshot / merge / manifest / help）`);
         process.exitCode = 2;
     }
   })().catch((err) => {

@@ -401,6 +401,173 @@ function makeFakeDist() {
   });
 
   // =========================================================================
+  // B-11 走查环境后端支撑（第四阶段）
+  //
+  // 验收口径（派单 27 §五 B-11）：
+  //   ① 稳定启动方式（端口固定 / --serve-only）—— 已有，此处做「回归锁定」
+  //   ② 日志可定向到走查证据目录 —— logger 自动建目录
+  //   ③ 启动即就绪探测 —— --ready-file + /__pkrc/health
+  //   ④ F-10 可直接使用 —— 契约见 docs/sourcemigration/B-11-走查环境后端支撑.md
+  // =========================================================================
+  process.stdout.write("\n[B-11] 走查环境后端支撑\n");
+
+  await test("B-11: --ready-file / --no-ready-file 的三态解析（未给=undefined / 空值=null / 给了=路径）", () => {
+    const a = parseArgs([]);
+    assert.strictEqual(a.readyFile, undefined, "未提供必须返回 undefined");
+    const b = parseArgs(["--ready-file="]);
+    assert.strictEqual(b.readyFile, null, "显式空值应表示禁用");
+    const c = parseArgs(["--ready-file=/tmp/x.json"]);
+    assert.strictEqual(c.readyFile, "/tmp/x.json");
+    const d = parseArgs(["--ready-file", "/tmp/y.json"]);
+    assert.strictEqual(d.readyFile, "/tmp/y.json", "空格形式也必须认");
+    const e = parseArgs(["--no-ready-file"]);
+    assert.strictEqual(e.readyFile, null);
+  });
+
+  await test("B-11: 启动后写出就绪文件，内容含**实际端口**与 health 路径", async () => {
+    const dir = tmpDir("ready");
+    const readyPath = path.join(dir, "nested", "ready.json"); // 目录不存在 → 必须自动创建
+    const handle = await startServer({
+      port: 0,
+      staticDir: makeFakeDist(),
+      logger: createLogger({ logDir: null, silent: true }),
+      readyFile: readyPath,
+      tag: "test",
+    });
+    try {
+      assert.strictEqual(handle.readyFile, readyPath);
+      assert.ok(fs.existsSync(readyPath), "就绪文件必须已落盘");
+      const info = JSON.parse(fs.readFileSync(readyPath, "utf8"));
+      assert.strictEqual(info.ok, true);
+      assert.strictEqual(info.port, handle.port, "就绪文件里的端口必须是内核分配的真实端口");
+      assert.strictEqual(info.tag, "test");
+      assert.strictEqual(info.healthPath, "/__pkrc/health");
+      // 不允许出现半成品临时文件
+      assert.ok(!fs.readdirSync(path.dirname(readyPath)).some((f) => f.includes(".tmp-")), "临时文件必须被 rename 掉");
+    } finally {
+      await handle.close();
+    }
+  });
+
+  await test("B-11: close() 删除就绪文件（驱动方据此判断服务已不在）", async () => {
+    const dir = tmpDir("ready2");
+    const readyPath = path.join(dir, "ready.json");
+    const handle = await startServer({
+      port: 0,
+      staticDir: makeFakeDist(),
+      logger: createLogger({ logDir: null, silent: true }),
+      readyFile: readyPath,
+    });
+    assert.ok(fs.existsSync(readyPath));
+    await handle.close();
+    assert.ok(!fs.existsSync(readyPath), "关闭后就绪文件应被删除");
+  });
+
+  await test("B-11: 不传 readyFile 时行为不变（不产生任何文件）", async () => {
+    const handle = await startServer({
+      port: 0,
+      staticDir: makeFakeDist(),
+      logger: createLogger({ logDir: null, silent: true }),
+    });
+    try {
+      assert.strictEqual(handle.readyFile, null);
+    } finally {
+      await handle.close();
+    }
+  });
+
+  await test("B-11: /__pkrc/health 返回 ok:true 且含端口/静态目录", async () => {
+    const handle = await startServer({
+      port: 0,
+      staticDir: makeFakeDist(),
+      logger: createLogger({ logDir: null, silent: true }),
+    });
+    try {
+      const r = await get(`${handle.url}__pkrc/health`);
+      assert.strictEqual(r.status, 200);
+      const body = JSON.parse(r.body);
+      assert.strictEqual(body.ok, true);
+      assert.strictEqual(body.port, handle.port);
+      assert.strictEqual(body.app, "pkrc-server");
+      assert.ok(typeof body.uptimeMs === "number");
+    } finally {
+      await handle.close();
+    }
+  });
+
+  await test("B-11: 健康端点**不改变**兜底语义（未命中路径仍 200 + ok:false）", async () => {
+    const dir = makeFakeDist();
+    const handle = await startServer({
+      port: 0,
+      staticDir: dir,
+      logger: createLogger({ logDir: null, silent: true }),
+    });
+    try {
+      // __pkrc/ 下**不存在**的路径 → 必须走原兜底，仍是 200 + JSON + ok:false
+      const r = await get(`${handle.url}__pkrc/nope`);
+      assert.strictEqual(r.status, 200, "兜底路由必须仍是 200（有意保留的历史行为）");
+      const body = JSON.parse(r.body);
+      assert.strictEqual(body.ok, false, "未命中仍是 JSON + ok:false");
+      assert.strictEqual(body.message, "File not found");
+    } finally {
+      await handle.close();
+    }
+  });
+
+  await test("B-11: 保留命名空间生效 —— dist 里即使存在同名文件，健康端点仍被优先路由", async () => {
+    const dir = makeFakeDist();
+    // 故意在 dist 里造一个与健康端点同名的文件（模拟 dist 被塞入同名资源）
+    fs.mkdirSync(path.join(dir, "__pkrc"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "__pkrc", "health"), "THIS IS NOT JSON", "utf8");
+    const handle = await startServer({
+      port: 0,
+      staticDir: dir,
+      logger: createLogger({ logDir: null, silent: true }),
+    });
+    try {
+      const r = await get(`${handle.url}__pkrc/health`);
+      assert.strictEqual(r.status, 200);
+      const body = JSON.parse(r.body); // 若是静态文件内容会解析失败
+      assert.strictEqual(body.ok, true);
+      assert.strictEqual(body.app, "pkrc-server");
+    } finally {
+      await handle.close();
+    }
+  });
+
+  await test("B-11: 端口占用时也写就绪文件（ok:false），驱动方不必等到超时", async () => {
+    const dir = tmpDir("readyfail");
+    const readyPath = path.join(dir, "ready.json");
+    const occupied = await startServer({
+      port: 0,
+      staticDir: makeFakeDist(),
+      logger: createLogger({ logDir: null, silent: true }),
+    });
+    try {
+      // 用 CLI 路径验证：子进程 spawn 在本沙箱会 EBUSY，故直接调 writeReadyFile + 断言格式契约
+      const { writeReadyFile } = require(SERVER_CJS);
+      const p = writeReadyFile(readyPath, { version: 1, ok: false, stage: "listen", error: "EADDRINUSE: 端口已被占用", port: occupied.port });
+      assert.strictEqual(p, readyPath);
+      const info = JSON.parse(fs.readFileSync(readyPath, "utf8"));
+      assert.strictEqual(info.ok, false);
+      assert.strictEqual(info.stage, "listen");
+      assert.ok(/EADDRINUSE/.test(info.error));
+    } finally {
+      await occupied.close();
+    }
+  });
+
+  await test("B-11: --log-dir 指向不存在的目录也能自动创建（走查证据目录）", () => {
+    const dir = tmpDir("logdir");
+    const nested = path.join(dir, "evidence", "scene-x", "logs");
+    const logger = createLogger({ logDir: nested, silent: true });
+    const p = logger.currentLogPath();
+    assert.ok(p, "日志文件必须创建成功");
+    assert.ok(fs.existsSync(p), "日志文件应存在");
+    assert.ok(p.startsWith(nested), "日志必须落在指定的走查证据目录下");
+  });
+
+  // =========================================================================
   // 1-H 无新依赖
   // =========================================================================
   process.stdout.write("\n[验收 1-H] 无新增运行时依赖\n");

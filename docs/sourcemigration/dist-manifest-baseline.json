@@ -1,0 +1,295 @@
+{
+  "tool": "tools/asset-pipeline.cjs manifest",
+  "at": "2026-10-16T08:46:54.859Z",
+  "dist": "game/server/dist",
+  "classes": [
+    {
+      "id": "assets",
+      "kind": "build",
+      "type": "dir",
+      "required": true,
+      "minFiles": 3,
+      "minBytes": null,
+      "present": true,
+      "files": 10,
+      "bytes": 6279210,
+      "zero": 0,
+      "ok": true,
+      "failReason": null
+    },
+    {
+      "id": "index.html",
+      "kind": "build",
+      "type": "file",
+      "required": true,
+      "minFiles": null,
+      "minBytes": 500,
+      "present": true,
+      "files": 1,
+      "bytes": 6918,
+      "zero": 0,
+      "ok": true,
+      "failReason": null
+    },
+    {
+      "id": "locales",
+      "kind": "both",
+      "type": "dir",
+      "required": true,
+      "minFiles": 100,
+      "minBytes": null,
+      "present": true,
+      "files": 1138,
+      "bytes": 5248274,
+      "zero": 0,
+      "ok": true,
+      "failReason": null
+    },
+    {
+      "id": "images",
+      "kind": "asset",
+      "type": "dir",
+      "required": true,
+      "minFiles": 1000,
+      "minBytes": null,
+      "present": true,
+      "files": 33239,
+      "bytes": 331738128,
+      "zero": 18,
+      "ok": true,
+      "failReason": null
+    },
+    {
+      "id": "audio",
+      "kind": "asset",
+      "type": "dir",
+      "required": true,
+      "minFiles": 100,
+      "minBytes": null,
+      "present": true,
+      "files": 2732,
+      "bytes": 424068669,
+      "zero": 0,
+      "ok": true,
+      "failReason": null
+    },
+    {
+      "id": "battle-anims",
+      "kind": "asset",
+      "type": "dir",
+      "required": true,
+      "minFiles": 10,
+      "minBytes": null,
+      "present": true,
+      "files": 925,
+      "bytes": 25006798,
+      "zero": 0,
+      "ok": true,
+      "failReason": null
+    },
+    {
+      "id": "fonts",
+      "kind": "asset",
+      "type": "dir",
+      "required": true,
+      "minFiles": 2,
+      "minBytes": null,
+      "present": true,
+      "files": 8,
+      "bytes": 1260092,
+      "zero": 0,
+      "ok": true,
+      "failReason": null
+    },
+    {
+      "id": "manifest.webmanifest",
+      "kind": "asset",
+      "type": "file",
+      "required": true,
+      "minFiles": null,
+      "minBytes": null,
+      "present": true,
+      "files": 1,
+      "bytes": 558,
+      "zero": 0,
+      "ok": true,
+      "failReason": null
+    },
+    {
+      "id": "logo128.png",
+      "kind": "asset",
+      "type": "file",
+      "required": true,
+      "minFiles": null,
+      "minBytes": null,
+      "present": true,
+      "files": 1,
+      "bytes": 3004,
+      "zero": 0,
+      "ok": true,
+      "failReason": null
+    },
+    {
+      "id": "logo512.png",
+      "kind": "asset",
+      "type": "file",
+      "required": true,
+      "minFiles": null,
+      "minBytes": null,
+      "present": true,
+      "files": 1,
+      "bytes": 6198,
+      "zero": 0,
+      "ok": true,
+      "failReason": null
+    },
+    {
+      "id": "starter-colors.json",
+      "kind": "asset",
+      "type": "file",
+      "required": true,
+      "minFiles": null,
+      "minBytes": null,
+      "present": true,
+      "files": 1,
+      "bytes": 15267,
+      "zero": 0,
+      "ok": true,
+      "failReason": null
+    },
+    {
+      "id": "exp-sprites.json",
+      "kind": "asset",
+      "type": "file",
+      "required": true,
+      "minFiles": null,
+      "minBytes": null,
+      "present": true,
+      "files": 1,
+      "bytes": 69532,
+      "zero": 0,
+      "ok": true,
+      "failReason": null
+    },
+    {
+      "id": "service-worker.js",
+      "kind": "mod",
+      "type": "file",
+      "required": true,
+      "minFiles": null,
+      "minBytes": null,
+      "present": true,
+      "files": 1,
+      "bytes": 98,
+      "zero": 0,
+      "ok": true,
+      "failReason": null
+    },
+    {
+      "id": "pkrc",
+      "kind": "mod",
+      "type": "dir",
+      "required": true,
+      "minFiles": 1,
+      "minBytes": null,
+      "present": true,
+      "files": 1,
+      "bytes": 3778,
+      "zero": 0,
+      "ok": true,
+      "failReason": null
+    }
+  ],
+  "sha256": {
+    "index.html": {
+      "size": 6918,
+      "sha256": "44938af68fd55289ad3bf55a4787f48b207d7974fe173777614d84d7d2a08994"
+    },
+    "manifest.webmanifest": {
+      "size": 558,
+      "sha256": "10cbc0544cba4d3211ce811236d42dc27329ebe6d1ca879c0ee8308d77397753"
+    },
+    "logo128.png": {
+      "size": 3004,
+      "sha256": "847102483cb24be31e423ccfb01e2b97cc2114d0da941159111a3de26df71f37"
+    },
+    "logo512.png": {
+      "size": 6198,
+      "sha256": "01d67ae770ecd1d74223bd750a43ab1d22942607eb4a24fbf9ba2ba69e2e2859"
+    },
+    "starter-colors.json": {
+      "size": 15267,
+      "sha256": "f3dc2f969ba6be8984307c55f1ca3ddc190fd14d0d4d158fdd4dfbbb8ec638d3"
+    },
+    "exp-sprites.json": {
+      "size": 69532,
+      "sha256": "8e3af9df617a24ec0eaf2d881cb575b783aeeb2b69287fd2ba6ca058378fa921"
+    },
+    "service-worker.js": {
+      "size": 98,
+      "sha256": "fee6dd4840598a5621b6a0197fcf09ebaccda80fd4d2325dd88a946353658baa"
+    },
+    "assets/battle-scene-Wj9NaQhZ.js": {
+      "size": 941498,
+      "sha256": "7b038d0f740968d193a9d69d16d21d3d9b05a2c9cc18d97d07118b977a8c42f7"
+    },
+    "assets/bbcodetext-BhD3nCUH.js": {
+      "size": 12025,
+      "sha256": "cf33362ffc1331995b2f3589f5554b55d6e2ab2ae2ca5affc785a9ac148d2c88"
+    },
+    "assets/browser-ponyfill-B94KYPln.js": {
+      "size": 11251,
+      "sha256": "252e7e202c5e18ce465643bdbc21448af66a9fffb4de12410b87855f97b72d3c"
+    },
+    "assets/chunk-Lvgwt9Fr.js": {
+      "size": 1402,
+      "sha256": "24590a5512785b3ba0d3c28ab8dcf2fe6b1d9c2dee9b8936d8c8ea2e262d1fad"
+    },
+    "assets/dev-function-CiRehoGv.js": {
+      "size": 116,
+      "sha256": "4059379bfb1cfc41ed70dd2bcbd8a1ecb6291361e705db3d497607e4bb91b454"
+    },
+    "assets/FadeOut-BmbPvbAN.js": {
+      "size": 1385760,
+      "sha256": "f9ea9622d28d5a3e14dd2b012c843ad7f0d1cc5ad56ccd71a8e672f62269712b"
+    },
+    "assets/index-fj-aLRGF.js": {
+      "size": 1041370,
+      "sha256": "a936198098092ee7754fbac3865c36d0f40641584ed21047a2c691b3550ef0db"
+    },
+    "assets/index-NkCvSCHF.css": {
+      "size": 6613,
+      "sha256": "4270d402c0454cb7dcc1501eddbaa94353f1218ca2960fbd209f0f58a69e31ef"
+    },
+    "assets/loading-scene-CoDM4HK8.js": {
+      "size": 2879095,
+      "sha256": "ab6a6ec54f01edce140f36c0774ccd350ca2c022e81ad2d4c03825e89b877a6e"
+    },
+    "assets/loading-scene-DoPNrWyn.js": {
+      "size": 80,
+      "sha256": "11b7738292ef9ce8950b2a5066c6b3cd330c0219257d517ea030bf53454fdda9"
+    }
+  },
+  "extras": [
+    {
+      "name": ".gitkeep",
+      "size": 0,
+      "allowed": true
+    },
+    {
+      "name": "update-source-comments.py",
+      "size": 2240,
+      "allowed": true
+    }
+  ],
+  "totals": {
+    "files": 38060,
+    "bytes": 793706524,
+    "zero": 18
+  },
+  "summary": {
+    "classes": 14,
+    "ok": 14,
+    "requiredMissing": []
+  }
+}
