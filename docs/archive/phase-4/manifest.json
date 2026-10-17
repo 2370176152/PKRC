@@ -1,0 +1,147 @@
+{
+  "$schema": "pkrc-phase-archive/v1",
+  "phase": {
+    "id": "phase-4",
+    "name": "地基验证收口",
+    "status": "partially_closed",
+    "closed_at": "2026-10-17",
+    "started_at": "2026-10-16",
+    "planned_window": { "start": "2026-10-16", "end": "2026-10-28", "working_days": 9 },
+    "actual": "2026-10-16 ~ 2026-10-17（2 天）",
+    "objective": "把第三阶段欠下的验证补完：M3 硬卡点归零 → 功能等价实测（M4）→ M5 正式达成",
+    "one_line": "本阶段把「验证所需的一切」都建好了，但没有执行任何一项验证",
+    "tasks": { "total": 23, "fully_done": 11, "partial": 2, "not_done": 10 },
+    "exit_criteria": { "total": 7, "fully_met": 0, "partial": 1, "not_met": 6 }
+  },
+  "git": {
+    "repo": "D:/Work/Pokemon/new",
+    "remote": "https://github.com/2370176152/PKRC.git",
+    "branch": "sourcemigration",
+    "head": "e506616",
+    "total_commits": 48,
+    "phase_commits": 10,
+    "remote_pushed": "55c261f",
+    "ahead_of_remote": 24,
+    "working_tree": "clean",
+    "diff_stat": "60 files changed, 13765 insertions(+), 111 deletions(-)",
+    "pre_archive_commits": 6,
+    "commits": [
+      { "order": 39, "sha": "6a3f344", "message": "feat(sourcemigration): B-9 资源补全管线 + B-11 走查环境后端支撑", "files": 6 },
+      { "order": 40, "sha": "e08b0a3", "message": "feat(sourcemigration): B-7 发布脚本实现（方案 B · 61 项回归全绿）", "files": 4 },
+      { "order": 41, "sha": "da2622d", "message": "feat(sourcemigration): B-10 环境快照迭代（快照含 headless browser 依赖）", "files": 4 },
+      { "order": 42, "sha": "7f6be53", "message": "chore(gitignore): 排除走查证据包（tools/walkthrough/evidence/）", "files": 1 },
+      { "order": 43, "sha": "74e73f3", "message": "feat(sourcemigration): A3-补 三十~四十二批 —— 覆盖率 67.78% → 74.94%", "files": 16 },
+      { "order": 44, "sha": "d6f21ba", "message": "feat(a4): A4-03 存档往返验证 —— 38/38 断言全过", "files": 2 },
+      { "order": 45, "sha": "af6e582", "message": "docs(sourcemigration): A4-00b 前置台账 + 剩余 7 项特性作战计划", "files": 3 },
+      { "order": 46, "sha": "e02cb5f", "message": "feat(walkthrough): F-10 自动化走查环境（双产物对比）", "files": 18 },
+      { "order": 47, "sha": "6eaa2a1", "message": "docs(delegation): 前端 F-11 / F-12 / F-13 交付报告", "files": 3 },
+      { "order": 48, "sha": "e506616", "message": "fix(tools): 签名基准自动探测（修复 A5-01 副作用）+ 状态标注更新", "files": 4 }
+    ]
+  },
+  "key_metrics": {
+    "signature_coverage": {
+      "phase_start_pct": 67.78,
+      "phase_end_pct": 74.94,
+      "delta_pt": 7.16,
+      "hits_before": 2118,
+      "hits_after": 2342,
+      "delta_hits": 224,
+      "baseline_symbols": 3125,
+      "core_upstream_symbols": "11/11",
+      "verified_by": "独立复跑 tools/verify-signature.cjs"
+    },
+    "residual_buckets": {
+      "tree_shake": 210,
+      "undetermined_residual": 533,
+      "undetermined_not_in_src": 507,
+      "dependency_noise": 40
+    },
+    "patch_hosts": { "total": 32, "closed": 25, "remaining": 7, "remaining_are_feature_level": true },
+    "anchor_tree": { "systems_files": 35, "src_ts_files": 633 },
+    "walkthrough": { "files": 17, "acceptance": "8/8", "selftest": "19/19" },
+    "save_roundtrip": { "assertions": 38, "passed": 38, "unverified": 1 }
+  },
+  "deliverables": [
+    { "id": "B-7", "owner": "后端", "task": "发布脚本实现（B-4 方案 B）", "path": "tools/release.cjs", "status": "done", "evidence": "61 项回归全绿" },
+    { "id": "B-9", "owner": "后端", "task": "资源补全管线", "path": "docs/sourcemigration/B-9-资源补全管线.md", "status": "done" },
+    { "id": "B-10", "owner": "后端", "task": "环境快照迭代（含 headless browser）", "path": "docs/sourcemigration/B-10-环境快照迭代.md", "status": "done" },
+    { "id": "B-11", "owner": "后端", "task": "走查环境后端支撑", "status": "done" },
+
+    { "id": "F-10", "owner": "前端", "task": "自动化走查环境（双产物对比·解锁项）", "path": "tools/walkthrough/", "status": "done", "evidence": "验收 8/8 · 自检 19/19 · P4-R2 解除 · 首跑抓到 P0 缺陷" },
+    { "id": "F-11", "owner": "前端", "task": "A3-补 U 组补迁", "path": "docs/delegation/31-F11-A3补U组补迁交付报告.md", "status": "done" },
+    { "id": "F-12", "owner": "前端", "task": "走查用例清单（全部可截图点）", "path": "docs/delegation/29-F12-走查用例清单.md", "status": "done" },
+    { "id": "F-13", "owner": "前端", "task": "S6 施工清单", "path": "docs/delegation/30-F13-S6施工清单.md", "status": "done" },
+
+    { "id": "A4-03", "owner": "全栈", "task": "存档往返验证", "path": "docs/sourcemigration/A4-03-存档往返验证报告.md", "status": "done", "evidence": "38/38 断言过；.prsv 字节级无样本未验证；无需 GUI" },
+    { "id": "A4-00b-2", "owner": "全栈", "task": "A3-补 继续迁", "path": "docs/sourcemigration/第四阶段总结-A3补33-42.md", "status": "partial", "evidence": "三十~四十二批 +97 命中" },
+    { "id": "A4-00b-3", "owner": "全栈", "task": "patch 宿主迁移", "path": "docs/sourcemigration/A4-00b-剩余特性作战计划.md", "status": "partial", "evidence": "32 宿主已闭 25，剩 7 项特性级" },
+    { "id": "A4-00b-4", "owner": "全栈", "task": "签名复测 → M3 判定门", "status": "not_passed", "note": "(d) 类残差 507 未迁" },
+    { "id": "A4-01", "owner": "全栈", "task": "11 系统走查（全部画面·双产物）", "status": "not_started", "note": "环境 F-10 与用例 F-12 均已就绪" },
+    { "id": "A4-04", "owner": "全栈", "task": "全流程 + 键盘回归", "status": "not_started" },
+    { "id": "A5-01b", "owner": "全栈", "task": "dist 资源补全验证", "status": "not_started" },
+    { "id": "A5-02", "owner": "全栈", "task": "共用回归清单", "status": "not_started" },
+    { "id": "A5-03b", "owner": "全栈", "task": "交接终版 + 解除「未验证」", "status": "not_started" },
+
+    { "id": "U-9", "owner": "UI", "task": "i18n B1~B3 批次映射", "status": "not_started" },
+    { "id": "U-10", "owner": "UI", "task": "S7 施工清单", "status": "not_started" },
+    { "id": "U-11", "owner": "UI", "task": "走查视觉判定标准", "status": "not_started", "note": "⚠️ 是 A4-01 的输入之一" },
+
+    { "id": "O-9", "owner": "所有者", "task": "GUI 实测口径", "status": "done", "evidence": "授权 F-10 自动化" },
+    { "id": "O-9b", "owner": "所有者", "task": "人工边界收紧", "status": "done", "evidence": "逐系统确认全部画面 + 双产物对比" },
+    { "id": "O-10", "owner": "所有者", "task": "A5-01 抢跑裁定", "status": "done", "evidence": "追认 + 标注「未验证」" },
+    { "id": "O-11", "owner": "所有者", "task": "推送本地提交", "status": "not_started", "note": "现领先远程 24" }
+  ],
+  "milestones": [
+    { "id": "M1", "name": "可构建的上游", "status": "achieved", "phase": 1 },
+    { "id": "M2", "name": "魔改点清单", "status": "achieved", "phase": 1 },
+    { "id": "M3", "name": "源码含魔改", "status": "hard_gate_failed", "note": "(d) 类残差 507 未迁；patch 25/32；覆盖率 74.94%" },
+    { "id": "M4", "name": "等价性验证", "status": "not_achieved", "note": "A4-01/A4-04 未执行（环境与用例已就绪）" },
+    { "id": "M5", "name": "产物切换", "status": "not_achieved", "note": "「未验证」标注仍在（解除条件：M4 通过）" },
+    { "id": "M6", "name": "输入层完成", "status": "not_started" },
+    { "id": "M7", "name": "视觉完成", "status": "not_started" },
+    { "id": "M8", "name": "发布管线就绪", "status": "not_started" },
+    { "id": "M9", "name": "可发布", "status": "not_started" }
+  ],
+  "key_findings": [
+    { "id": "DEADLOCK", "desc": "M3 与 M4 互为死锁：O-5 要求 M3 过才放行 A4；M3 需迁完 507 符号，其大头是 UI（61 组件 + 202/210 tree-shake 宿主），而 UI 迁移已连续两批失败 ⇒ A4 永远不启动", "severity": "critical" },
+    { "id": "BASELINE-POLLUTION", "desc": "A5-01 切换后 verify-signature.cjs 的 baseline 指向了候选本身 ⇒ 覆盖率虚高至 ~100% ⇒ 足以误判 M3 通过。已加 detectBaseline() 修复", "severity": "high" },
+    { "id": "CAPABILITY-NE-RESULT", "desc": "能力建设 10 项全绿、覆盖率 +7.16 pt，但出口判据 0/7 —— 判据全部指向「验证结果」而非「验证能力」", "severity": "high" },
+    { "id": "WALKTHROUGH-IMMEDIATE-VALUE", "desc": "F-10 首跑即抓到 P0 启动阻断缺陷 —— 该缺陷在纯静态验证里看不出来", "severity": "high" },
+    { "id": "GUI-JUDGMENT-TOO-STRICT", "desc": "A4-03 被第三阶段判为「需 GUI」，本阶段用 Node 沙盒 38/38 通过 —— 判断偏严等于白等一个阶段", "severity": "medium" },
+    { "id": "RETARGET-BEATS-GRINDING", "desc": "eryou-ui 2 批 0 收益（2 次回滚）vs 五孤岛 7 批 +97 —— 连续两批零收益就该换靶，而非加码", "severity": "medium" },
+    { "id": "RESIDUAL-NE-DEFECT", "desc": "未定性残差 533 ≠ 迁移缺陷数：507 是「src 根本没有」，另有 210 是 tree-shake（src 有、无入口）", "severity": "medium" },
+    { "id": "GIT-PARALLEL-LOCK", "desc": "并行执行两条 git commit 触发 index.lock，一条失败 —— 同仓 git 写操作必须串行", "severity": "low" },
+    { "id": "EVIDENCE-GOVERNANCE", "desc": "走查证据 2.5MB（仅 demo）不可入库，但 O-9b 要求所有者复核权 ⇒ 需归档治理（B-13）", "severity": "medium" }
+  ],
+  "risks": {
+    "closed": [
+      { "id": "P4-R2", "name": "F-10 自动化环境建不起来", "closed_at": "2026-10-16", "evidence": "验收 8/8 · 自检 19/19" },
+      { "id": "P4-R3", "name": "存档不兼容", "closed_at": "2026-10-16", "evidence": "A4-03 字段级 38/38 通过" },
+      { "id": "P4-R5", "name": "O-10 选回滚", "closed_at": "2026-10-16", "evidence": "裁定追认" }
+    ],
+    "open": [
+      { "id": "N-1", "name": "M3 硬卡点未过（(d) 507 未迁）", "level": "high", "owner": "全栈 + 所有者", "carry_to": "phase-5" },
+      { "id": "N-2", "name": "M3 ↔ M4 死锁", "level": "critical", "owner": "项目所有者", "carry_to": "phase-5", "action": "O-12 定案" },
+      { "id": "N-3", "name": "A4-01 / A4-04 未执行", "level": "high", "owner": "全栈", "carry_to": "phase-5" },
+      { "id": "N-4", "name": "A5-01b/02/03b 未执行", "level": "medium", "owner": "全栈", "carry_to": "phase-5" },
+      { "id": "N-5", "name": "UI 三项未开工（U-11 阻塞 A4-01）", "level": "medium", "owner": "UI", "carry_to": "phase-5" },
+      { "id": "N-6", "name": "走查证据包归档治理（O-9b 复核权）", "level": "medium", "owner": "后端", "carry_to": "phase-5" },
+      { "id": "N-7", "name": ".prsv 字节级未验证（无样本）", "level": "low", "owner": "项目所有者", "carry_to": "phase-5" },
+      { "id": "N-8", "name": "本地领先远程 24 提交", "level": "medium", "owner": "项目所有者", "carry_to": "phase-5" },
+      { "id": "N-9", "name": "剩余 7 项特性级（squad UI 4858 / PT 通关 ~5000 / SpeedTurnPhase 1898）", "level": "medium", "owner": "全栈", "carry_to": "phase-5" },
+      { "id": "N-10", "name": "mingzuo 美术授权未确认", "level": "low", "owner": "项目所有者", "carry_to": "phase-5" }
+    ]
+  },
+  "next_phase": {
+    "id": "phase-5",
+    "name": "M3 判据定案与等价性验证",
+    "dispatch_doc": "docs/delegation/32-第五阶段任务分发.md",
+    "window": { "start": "2026-10-19", "end": "2026-10-28", "working_days": 8 },
+    "targets": ["M3 定案 @ 2026-10-20", "M4 @ 2026-10-26", "M5 @ 2026-10-28"],
+    "first_decision": {
+      "id": "O-12",
+      "question": "M3 判据是否改写以解除 M3↔M4 死锁",
+      "options": ["继续迁到 (d)=0", "改写判据（核心完整+覆盖率≥75%+残差定性）", "分层判据", "先做可动批次再判"]
+    }
+  }
+}
