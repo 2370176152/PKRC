@@ -19,6 +19,8 @@
 | **功能等价** | 🔴 **未验证**（A4-01 走查 / A4-04 回归未做） |
 
 **若遇到功能异常、界面异常或存档问题，这是已知的待验证范围**，请记录现象并回报。
+**已知功能缺口的用户可见清单**：[`docs/sourcemigration/已知功能缺口-用户版.md`](../docs/sourcemigration/已知功能缺口-用户版.md)
+（共 446 项待迁 + 61 项已明确放弃，按域分布列出）
 **回滚到原 modder 产物**：备份在 `game/server/dist.modder-backup-20261016/`，
 命令见 `docs/sourcemigration/A5-交接文档.md` §2.2。
 
