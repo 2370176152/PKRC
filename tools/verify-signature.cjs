@@ -385,7 +385,19 @@ function scanVendorTokens(rootDir) {
 // ---------------------------------------------------------------------------
 function main() {
   const anchor = path.join(REPO_ROOT, DEFAULT_ANCHOR);
-  const baselineDir = path.resolve(REPO_ROOT, opt("--baseline") || path.join("game", "server", "dist", "assets"));
+  // ⚠️ A5-01 切换后 `game/server/dist/assets` 已是**自构建产物** ⇒ 基准必须用 modder 备份。
+  //    自动探测 `game/server/dist.modder-backup-*/assets`（取最新），否则回退到旧默认路径。
+  function detectBaseline() {
+    const cli = opt("--baseline");
+    if (cli) return path.resolve(REPO_ROOT, cli);
+    const serverDir = path.join(REPO_ROOT, "game", "server");
+    const cands = fs.existsSync(serverDir)
+      ? fs.readdirSync(serverDir).filter(d => /^dist\.modder-backup-/.test(d)).sort().reverse()
+      : [];
+    if (cands.length) return path.join(serverDir, cands[0], "assets");
+    return path.resolve(REPO_ROOT, path.join("game", "server", "dist", "assets"));
+  }
+  const baselineDir = detectBaseline();
   const candidateDir = path.resolve(REPO_ROOT, opt("--candidate") || path.join(anchor, "dist", "assets"));
   const srcDir = path.resolve(REPO_ROOT, opt("--src") || path.join(anchor, "src"));
 
