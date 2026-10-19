@@ -58,15 +58,25 @@ console.log("已备份 →", path.relative(ANCHOR, backup));
 fs.writeFileSync(abs, lines.filter((l) => !isDeclare(l)).join("\n"));
 
 // 跑 tsc，收集该文件的 TS2304
+// 🔴 Windows 陷阱（2026-10-19 实测踩中）：`node_modules/.bin/tsc` 是 shell shim，
+//   execFileSync 直接调它会ENOENT ⇒ 抛异常 ⇒ out 为空 ⇒ **所有 declare 被误判为「D类误捕」**。
+//   正解：走 `node <typescript>/lib/tsc.js`（真实 JS 入口，跨平台可用）。
 let out = "";
+const TSC_JS = path.join(ANCHOR, "node_modules", "typescript", "lib", "tsc.js");
 try {
-  out = execFileSync(path.join(ANCHOR, "node_modules", ".bin", "tsc"), ["--noEmit"], {
+  out = execFileSync(process.execPath, [TSC_JS, "--noEmit", "-p", "."], {
     cwd: ANCHOR,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
+  console.log("[探测] tsc 执行成功（exit 0）");
 } catch (e) {
   out = (e.stdout || "") + (e.stderr || "");
+  if (e.code === "ENOENT") {
+    console.error("[探测] 🔴 tsc 进程未能启动（ENOENT）——本轮结果不可信！请检查路径。");
+    process.exit(2);
+  }
+  console.log("[探测] tsc 有报错输出（预期，删declare 后必然报错），已收集");
 }
 
 // 还原
