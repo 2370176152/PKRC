@@ -287,11 +287,60 @@ function findResidue(root) {
 
 /**
  * 删除打包残留（在合并产物上执行）。
+ *
+ * 判定比 `findResidue()` 更宽一档（B-14 演练暴露的第二类残渣）：
+ *   ② **零字节 + 无扩展名** 的文件。
+ *   实证：原始发行包 `PKRC.zip` 的 `server/dist/images/pokemon/**` 下有 18 个
+ *   0 字节、无扩展名、文件名为中文的文件（`1这里正` / `这里背` / `1这里背` …）。
+ *   判定依据两条同时成立：① 加载器按 `{id}.png` 精确匹配 ⇒ 无扩展名文件永不被加载；
+ *                          ② 0 字节 ⇒ 不含任何数据。⇒ 必然是作者拷贝事故的残渣。
+ *
+ *   ⚠️ 为什么**只在这里**放宽、而不改 `findResidue()`：
+ *      `findResidue()` 供 `verifyDist` 报告用，那里零字节文件要作为**失败项**暴露
+ *      （`zeroReal`），不能降级成"可自动清理的残留"。职责分开：
+ *      **verify 负责把问题顶出来，merge 负责把能安全清掉的清掉。**
+ *
  * @returns {string[]} 被删除的相对路径
  */
 function pruneResidue(root, logFn) {
   const hits = findResidue(root);
   const removed = [];
+  const seen = new Set(hits);
+
+  // 追加：零字节 + 无扩展名（排除 .gitkeep 占位符）
+  const stack = [""];
+  while (stack.length) {
+    const rel = stack.pop();
+    const dir = rel ? path.join(root, rel) : root;
+    let ents;
+    try {
+      ents = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of ents) {
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) {
+        stack.push(r);
+        continue;
+      }
+      if (!e.isFile() || seen.has(r)) continue;
+      if (e.name === ".gitkeep") continue;
+      if (/\.[a-z0-9]+$/i.test(e.name)) continue; // 有扩展名 → 交给 verify 判
+      let size = -1;
+      try {
+        size = fs.statSync(path.join(root, r)).size;
+      } catch {
+        continue;
+      }
+      if (size === 0) {
+        hits.push(r);
+        seen.add(r);
+      }
+    }
+  }
+
+  hits.sort();
   for (const rel of hits) {
     try {
       fs.rmSync(path.join(root, rel), { force: true });

@@ -697,6 +697,28 @@ async function suiteRollback() {
     assert.ok(isOldDist(target, "NEWER"));
   });
 
+  await test("回滚是「精确恢复」：随备份回迁的 SHA256SUMS 必须被清掉（B-14 演练实测 38041→38042）", async () => {
+    const d = tmp("rb-manifest");
+    // ① 我们自己写的清单 → 应删
+    const ours = path.join(d, "ours");
+    fs.mkdirSync(ours, { recursive: true });
+    fs.writeFileSync(path.join(ours, "SHA256SUMS"), "# PKRC release backup\n# files: 1\nabc  x\n");
+    assert.strictEqual(R.removeRestoredManifest(ours, () => {}), true);
+    assert.ok(!fs.existsSync(path.join(ours, "SHA256SUMS")), "自己写的清单必须删掉");
+
+    // ② 产物自带的同名文件（首行不是我们的标记）→ 绝不删
+    const theirs = path.join(d, "theirs");
+    fs.mkdirSync(theirs, { recursive: true });
+    fs.writeFileSync(path.join(theirs, "SHA256SUMS"), "deadbeef  asset.png\n");
+    assert.strictEqual(R.removeRestoredManifest(theirs, () => {}), false);
+    assert.ok(fs.existsSync(path.join(theirs, "SHA256SUMS")), "不能误删产物自带的同名文件");
+
+    // ③ 没有该文件 → 返回 false，不抛异常
+    const empty = path.join(d, "empty");
+    fs.mkdirSync(empty, { recursive: true });
+    assert.strictEqual(R.removeRestoredManifest(empty, () => {}), false);
+  });
+
   await test("写入边界：publish 只动 target/staging/backup 三个根，存档哨兵零改动（D5）", async () => {
     const f = mkF("scope");
     const saves = path.join(f.d, "saves");

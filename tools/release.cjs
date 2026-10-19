@@ -709,6 +709,7 @@ async function cmdPublish() {
         fs.rmSync(target, { recursive: true, force: true });
         fs.renameSync(backupDir, target);
       }
+      removeRestoredManifest(target, log);
       log("     ✅ 已恢复。目标仍是旧产物。");
     } catch (err2) {
       log("     ❌❌ 恢复也失败！**需要人工介入**：");
@@ -750,9 +751,9 @@ async function cmdPublish() {
     try {
       fs.renameSync(target, brokenDir);
       if (backupMode === "move") fs.renameSync(backupDir, target);
-      else {
-        copyTree(backupDir, target);
-      }
+      else copyTree(backupDir, target);
+      // 两种模式下 SHA256SUMS 都会跟着回到 target ⇒ 清掉，保证"回滚 = 精确恢复"
+      removeRestoredManifest(target, log);
       log(`  ✅ 已回滚：问题产物保留在 ${brokenDir}；目标已恢复为旧产物。`);
       log("  现场未丢，可据此分析。");
       return {
@@ -812,6 +813,31 @@ async function cmdPublish() {
 function copyTree(src, dst) {
   fs.mkdirSync(dst, { recursive: true });
   fs.cpSync(src, dst, { recursive: true });
+}
+
+/**
+ * 回滚把「备份」换回「目标」之后，备份目录里那份 `SHA256SUMS` 会**跟着回到线上**。
+ *
+ * 它不是构建产物的一部分 ⇒ 必须删掉，否则「回滚」就不是**精确恢复**而是
+ * 「恢复 + 多一个文件」（B-14 演练实测：38,041 → 38,042）。
+ *
+ * 只删**我们自己写的那份** —— 靠首行标记识别（`# PKRC release backup`），
+ * 绝不误删产物自带的同名文件。
+ *
+ * @returns {boolean} 是否删除了
+ */
+function removeRestoredManifest(dir, logFn) {
+  const f = path.join(dir, "SHA256SUMS");
+  try {
+    if (!fs.existsSync(f)) return false;
+    const head = fs.readFileSync(f, "utf8").split("\n")[0] || "";
+    if (head.indexOf("# PKRC release backup") !== 0) return false;
+    fs.rmSync(f, { force: true });
+    if (logFn) logFn("  🧹 已移除随备份回迁的 SHA256SUMS（它不是产物的一部分，保留就不是精确恢复了）");
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -944,10 +970,11 @@ async function cmdRollback() {
     }
     return { code: 1 };
   }
+  // 备份里那份 SHA256SUMS 会跟着回到线上 ⇒ 清掉（回滚必须是精确恢复）
+  removeRestoredManifest(target, (m) => out(m));
   out("✅ 回滚完成");
   out(`  当前目标 = 备份内容：${target}`);
-  out(`  回滚前的产物保留在：${rollbackDir}`);
-  return { code: 0, report: { backupDir, rollbackDir } };
+  out(`  回滚前的产物保留在：${rollbackDir}`);  return { code: 0, report: { backupDir, rollbackDir } };
 }
 
 // ---------------------------------------------------------------------------
@@ -1102,6 +1129,7 @@ module.exports = {
   // 可单测的纯/近纯函数
   smokeTest,
   isFallbackNotFound,
+  removeRestoredManifest,
   pruneBackups,
   hashTree,
   spaceProbe,

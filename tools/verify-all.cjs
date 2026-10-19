@@ -141,7 +141,7 @@ const SUITES = [
     node: "runtime",
     file: "tools/test-release.cjs",
     cwd: ".",
-    min: 61,
+    min: 62,
     countRe: /总计：(\d+)\s*通过/,
   },
   {
@@ -151,7 +151,7 @@ const SUITES = [
     node: "runtime",
     file: "tools/test-asset-pipeline.cjs",
     cwd: ".",
-    min: 40,
+    min: 42,
     countRe: /总计：(\d+)\s*通过/,
   },
   {

@@ -567,6 +567,33 @@ async function suiteResidue() {
     assert.deepStrictEqual(pipeline.findResidue(d), []);
   });
 
+  await test("pruneResidue 也清「零字节 + 无扩展名」的拷贝事故残渣（B-14 演练暴露）", () => {
+    const d = tmpDir("prune2");
+    makeFiles(d, {
+      // 真实发行包里 images/pokemon/** 下的那类东西：0 字节、无扩展名、中文名
+      "images/pokemon/back/1这里背": 0,
+      "images/pokemon/variant/1这里正": 0,
+      // 有扩展名的 0 字节文件**不在这里清**（交给 verify 作为失败项暴露）
+      "images/pokemon/broken.png": 0,
+      // 占位符必须保留
+      "images/.gitkeep": 0,
+      // 正常资产
+      "images/pokemon/1.png": 8,
+    });
+    const removed = pipeline.pruneResidue(d, () => {});
+    assert.deepStrictEqual(removed.sort(), ["images/pokemon/back/1这里背", "images/pokemon/variant/1这里正"]);
+    assert.ok(fs.existsSync(path.join(d, "images/pokemon/broken.png")), "有扩展名的零字节文件不该被 merge 悄悄清掉");
+    assert.ok(fs.existsSync(path.join(d, "images/.gitkeep")), ".gitkeep 是合法占位符");
+    assert.ok(fs.existsSync(path.join(d, "images/pokemon/1.png")));
+  });
+
+  await test("findResidue 仍是「只看后缀」—— 零字节无扩展名由 pruneResidue 单独处理", () => {
+    const d = tmpDir("findres");
+    makeFiles(d, { "a/1这里正": 0, "a/x.zip": 4 });
+    // findResidue 供 verify 报告用，不能把零字节文件降级成"可自动清理的残留"
+    assert.deepStrictEqual(pipeline.findResidue(d), ["a/x.zip"]);
+  });
+
   await test("PACKAGING_RESIDUE_RE 不匹配大小写变体以外的正常扩展（.ZIP 也算）", () => {
     assert.ok(pipeline.PACKAGING_RESIDUE_RE.test("A.ZIP"));
     assert.ok(pipeline.PACKAGING_RESIDUE_RE.test("x.psd"));
