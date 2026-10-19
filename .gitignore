@@ -146,7 +146,8 @@ PKRC/
 #      ③ 入库会让每次走查都产生巨量二进制 diff，永久污染历史
 #
 #    ⚠️ 但 **O-9b 要求所有者保留「全量证据包复核权」** ⇒
-#       证据必须**归档可查**（见 B-13：manifest + 归档位置 + 体积治理），
+#       证据必须**归档可查**（见 B-12：manifest + 归档位置 + 体积治理，
+#       工具 tools/evidence-manifest.cjs，文档 docs/sourcemigration/B-12-证据归档与体积治理.md），
 #       只是不进 git。
 # ============================================================
 tools/walkthrough/evidence/
