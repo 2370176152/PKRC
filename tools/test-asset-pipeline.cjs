@@ -535,6 +535,58 @@ async function suiteManifest() {
 }
 
 // ---------------------------------------------------------------------------
+// [B-16] 打包残留过滤
+// ---------------------------------------------------------------------------
+async function suiteResidue() {
+  process.stdout.write("\n[B-16] 打包残留（作者交付包解压后未删的原件）\n");
+
+  await test("findResidue 只认压缩/设计/备份类后缀，不误伤运行时资产", () => {
+    const d = tmpDir("residue");
+    makeFiles(d, {
+      "images/a.zip": 4,
+      "images/b.psd": 4,
+      "audio/c.mp3": 4,
+      "fonts/d.ttf": 4,
+      "x.song.bak": 4,
+      "keep.json": 4,
+      "deep/nested/e.7z": 4,
+    });
+    const hits = pipeline.findResidue(d);
+    assert.deepStrictEqual(hits, ["deep/nested/e.7z", "images/a.zip", "images/b.psd", "x.song.bak"]);
+  });
+
+  await test("pruneResidue 删除并返回清单，且保留正常文件", () => {
+    const d = tmpDir("prune");
+    makeFiles(d, { "images/a.zip": 4, "audio/c.mp3": 4, "keep.json": 4 });
+    const logs = [];
+    const removed = pipeline.pruneResidue(d, (m) => logs.push(m));
+    assert.deepStrictEqual(removed, ["images/a.zip"]);
+    assert.strictEqual(logs.length, 1, "每删一个都要有日志（不能静默）");
+    assert.ok(fs.existsSync(path.join(d, "audio/c.mp3")));
+    assert.ok(fs.existsSync(path.join(d, "keep.json")));
+    assert.deepStrictEqual(pipeline.findResidue(d), []);
+  });
+
+  await test("PACKAGING_RESIDUE_RE 不匹配大小写变体以外的正常扩展（.ZIP 也算）", () => {
+    assert.ok(pipeline.PACKAGING_RESIDUE_RE.test("A.ZIP"));
+    assert.ok(pipeline.PACKAGING_RESIDUE_RE.test("x.psd"));
+    assert.ok(!pipeline.PACKAGING_RESIDUE_RE.test("x.json"));
+    assert.ok(!pipeline.PACKAGING_RESIDUE_RE.test("x.mp3"));
+    assert.ok(!pipeline.PACKAGING_RESIDUE_RE.test("x.old.json"), "只能匹配后缀末尾");
+  });
+
+  await test("verifyDist 报告 residue 但**不计失败**（整洁性问题≠功能问题）", () => {
+    const d = tmpDir("vres");
+    // 造一个只有残留、没有其它内容的目录：ok 必然 false（类不全），
+    // 但 residue 必须被单独列出来，且不进入 failures
+    makeFiles(d, { "images/mingzuo.zip": 8 });
+    const r = pipeline.verifyDist(d, { atlas: false });
+    assert.deepStrictEqual(r.residue, ["images/mingzuo.zip"]);
+    assert.ok(!r.failures.some((f) => /zip/i.test(f)), `residue 不该出现在 failures：${r.failures}`);
+  });
+}
+
+// ---------------------------------------------------------------------------
 // 主流程
 // ---------------------------------------------------------------------------
 (async function main() {
@@ -549,6 +601,7 @@ async function suiteManifest() {
   await suiteCopyMissing();
   await suiteLocales();
   await suiteManifest();
+  await suiteResidue();
 
   const pass = results.filter((r) => r.ok).length;
   const fail = results.length - pass;

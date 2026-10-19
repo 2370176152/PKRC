@@ -249,6 +249,62 @@ const ALLOWED_EXTRA_TOP = [
 ];
 
 /**
+ * **打包残留**：作者交付的压缩包被解压进 `dist/` 后没删掉的原件。
+ *
+ * 实证（B-16，2026-10-19）：`images/mingzuo.zip`（193,753 B）与
+ * `images/mingzuo/`（7 张 PNG）在原始发行包 `PKRC.zip` 里**同时存在** ——
+ * 作者把美术交付的压缩包解压后忘了删原件。运行期只按 `images/mingzuo/*.png`
+ * 取图，**整个 dist 的 js/json/html/css 里搜不到 `mingzuo` 这个字符串**，
+ * 故压缩包是纯残留。
+ *
+ * ⚠️ 为什么要在**合并期**处理而不只是删一次：
+ *    E-5（A5-01b）会从同一个发行包重新并资产 ⇒ 只删一次等于没删，
+ *    下次发布会把它带回来。故 planMerge/runMergePlan 侧做过滤。
+ */
+const PACKAGING_RESIDUE_RE = /\.(zip|rar|7z|psd|bak|old|orig|tmp|swp)$/i;
+
+/** 递归找打包残留（相对路径数组） */
+function findResidue(root) {
+  const hits = [];
+  const stack = [""];
+  while (stack.length) {
+    const rel = stack.pop();
+    const dir = rel ? path.join(root, rel) : root;
+    let ents;
+    try {
+      ents = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of ents) {
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) stack.push(r);
+      else if (e.isFile() && PACKAGING_RESIDUE_RE.test(e.name)) hits.push(r);
+    }
+  }
+  return hits.sort();
+}
+
+/**
+ * 删除打包残留（在合并产物上执行）。
+ * @returns {string[]} 被删除的相对路径
+ */
+function pruneResidue(root, logFn) {
+  const hits = findResidue(root);
+  const removed = [];
+  for (const rel of hits) {
+    try {
+      fs.rmSync(path.join(root, rel), { force: true });
+      removed.push(rel);
+      if (logFn) logFn(`  🧹 剔除打包残留 ${rel}`);
+    } catch (err) {
+      if (logFn) logFn(`  ⚠️ 剔除失败 ${rel}：${err.message}`);
+    }
+  }
+  return removed;
+}
+
+/**
  * locales 语言目录**别名表**：mod 发行版命名 → 上游现行命名。
  *
  * 依据（不是猜的）：锚点树 `src/i18n.ts` 的 `supportedLngs` 明确列的是
@@ -717,6 +773,7 @@ function verifyDist(dist, opts = {}) {
     zeroPlaceholders: 0,
     atlas: null,
     extras: [],
+    residue: [],
     totals: { files: 0, bytes: 0 },
     failures: [],
   };
@@ -802,6 +859,12 @@ function verifyDist(dist, opts = {}) {
   }
 
   r.ok = r.failures.length === 0;
+
+  // ⑥ 打包残留（**只报告不计失败**）：作者交付包解压后遗留的 .zip/.psd/…
+  //    运行期从不引用它们，属整洁性问题而非功能问题 —— 故不做成失败项，
+  //    但必须让它可见（否则「校验通过」会掩盖一堆垃圾文件）。
+  r.residue = findResidue(dist);
+
   return r;
 }
 
@@ -898,6 +961,14 @@ async function cmdVerify() {
   else {
     out(`  ⚠️ ${r.extras.length} 个非预期顶层文件（建议构建时排除）：`);
     for (const u of r.extras) out(`       ${u}`);
+  }
+  // 打包残留（B-16）：只报告不计失败 —— 运行期从不引用，属整洁性问题
+  if (r.residue && r.residue.length) {
+    out(`  ⚠️ ${r.residue.length} 个打包残留（作者交付包解压后未删的原件，建议剔除）：`);
+    for (const u of r.residue) out(`       ${u}`);
+    out("       ⇒ `merge` 会默认剔除；`--keep-residue` 可关闭");
+  } else {
+    out("  ✅ 无打包残留（.zip/.psd/.bak/…）");
   }
 
   // ⑥ 汇总
@@ -1279,7 +1350,16 @@ function runMergePlan(pre, o = {}) {
     });
     if (check.some((c) => !c.ok)) failed = true;
   }
-  return { done, check, failed };
+
+  // 打包残留过滤（**显式 opt-in**：`o.pruneResidue === true`，不做隐式删除）
+  //   B-16 实证：E-5 会从同一个发行包重新并资产 ⇒ 只删一次等于没删。
+  let residue = [];
+  if (o.pruneResidue === true && commit && fs.existsSync(pre.to)) {
+    residue = pruneResidue(pre.to, log);
+    if (residue.length) done.push({ id: "(packaging-residue)", action: "prune", removed: residue });
+  }
+
+  return { done, check, failed, residue };
 }
 
 async function cmdMerge() {
@@ -1363,7 +1443,12 @@ async function cmdMerge() {
 
   // ---- 执行 --------------------------------------------------------------
   // 执行逻辑由 runMergePlan 唯一实现（release.cjs 复用同一份）
-  const exec = runMergePlan(pre, { commit, log: wantJson ? null : (m) => out(m) });
+  // `pruneResidue` 默认开（B-16）：剔除 .zip/.psd 等打包残留；`--keep-residue` 关闭
+  const exec = runMergePlan(pre, {
+    commit,
+    log: wantJson ? null : (m) => out(m),
+    pruneResidue: !flag("--keep-residue"),
+  });
   const done = exec.done;
   if (exec.failed) process.exitCode = 1;
 
@@ -1838,6 +1923,9 @@ module.exports = {
   UPSTREAM,
   RESOURCE_CLASSES,
   ALLOWED_EXTRA_TOP,
+  PACKAGING_RESIDUE_RE,
+  findResidue,
+  pruneResidue,
   LOCALE_ALIAS,
   classSpec,
 };

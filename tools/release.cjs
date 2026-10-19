@@ -578,7 +578,14 @@ async function cmdPublish() {
   //   两处各判一次会造成误导性双报（② 报「组装失败」，③ 根本没机会跑），
   //   而 ② 的失败其实只是「类不全」——那是 ③ 的职责。
   //   关掉之后，② 的失败只剩一种含义：**某个拷贝真的抛错了**。
-  const asm = pipeline.runMergePlan(pre, { commit: true, log: (m) => log(m), selfCheck: false });
+  const asm = pipeline.runMergePlan(pre, {
+    commit: true,
+    log: (m) => log(m),
+    selfCheck: false,
+    // B-16：剔除打包残留（.zip/.psd/…）。E-5 会从同一个发行包重新并资产，
+    // 不在合并期过滤的话「删一次」等于没删。
+    pruneResidue: true,
+  });
   if (asm.failed) {
     log("");
     log("⇒ F2 组装失败（某个拷贝抛错）：已清掉本次暂存产物，**未触碰目标**。");
