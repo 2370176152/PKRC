@@ -1,0 +1,139 @@
+{
+  "$schema": "pkrc-phase-archive/v1",
+  "phase": {
+    "id": "phase-5",
+    "name": "M3 判据定案与等价性验证",
+    "status": "partially_closed",
+    "closed_at": "2026-10-19",
+    "started_at": "2026-10-19",
+    "planned_window": { "start": "2026-10-19", "end": "2026-10-28", "working_days": 8 },
+    "actual": "2026-10-19（单日）",
+    "objective": "解开 M3↔M4 死锁，然后执行验证 —— 让 M3 / M4 / M5 三个里程碑真正落地",
+    "one_line": "走查全链路已经建成并实测可跑 —— 但一次都没跑",
+    "tasks": { "total": 21, "fully_done": 12, "partial": 1, "not_done": 8 },
+    "exit_criteria": { "total": 7, "fully_met": 1, "partial": 2, "not_met": 4 }
+  },
+  "git": {
+    "repo": "D:/Work/Pokemon/new",
+    "remote": "https://github.com/2370176152/PKRC.git",
+    "branch": "sourcemigration",
+    "head": "9b88eef",
+    "total_commits": 61,
+    "phase_commits": 8,
+    "remote_pushed": "895c983",
+    "ahead_of_remote": 11,
+    "working_tree": "clean",
+    "diff_stat": "45 files changed, 50941 insertions(+), 173 deletions(-)",
+    "pre_archive_commits": 2,
+    "commits": [
+      { "order": 54, "sha": "321c31d", "message": "feat(evidence): B-12 走查证据包归档与体积治理", "files": 4 },
+      { "order": 55, "sha": "5e117af", "message": "chore(dist): B-16 剔除遗留打包文件 + 合并管线残留过滤", "files": 4 },
+      { "order": 56, "sha": "fdfa67a", "message": "feat(tools): B-13 通用回归一键化 verify-all.cjs（8 套件 / 344 项 / 40.4s）", "files": 3 },
+      { "order": 57, "sha": "b29f689", "message": "feat(prsv): B-15 真实 .prsv 样本 + 零依赖编解码器（含判据纠正）", "files": 7 },
+      { "order": 58, "sha": "4e611e3", "message": "docs(ui): U-9/U-10/U-11 交付（3/3）+ 派单进度回写", "files": 11 },
+      { "order": 59, "sha": "fad4873", "message": "feat(release): B-14 发布脚本端到端演练（真实 756.8MB · 15/15）", "files": 9 },
+      { "order": 60, "sha": "31317a6", "message": "feat(sourcemigration): E-1 低风险三批 + 11 系统完整性核查表", "files": 2 },
+      { "order": 61, "sha": "9b88eef", "message": "feat(walkthrough): F-14 走查场景实现（51 画面点 / 12 系统 / 五态裁定 + 闸门）", "files": 11 }
+    ]
+  },
+  "key_metrics": {
+    "regression_suite": { "suites": 8, "assertions": 344, "duration_s": 40.4 },
+    "release_rehearsal": { "real_artifact_mb": 756.8, "checks": "15/15" },
+    "prsv_tests": { "passed": 23, "total": 23, "real_samples": 2 },
+    "walkthrough": {
+      "screenshot_points": 51,
+      "systems": 12,
+      "route_reliability": { "verified": 2, "derived": 22, "unknown": 27 },
+      "gate_coverage": "43/51"
+    },
+    "evidence_size_mb": { "phase4": 2.5, "phase5": 24 },
+    "signature": { "hits": 2342, "coverage_pct": 74.94, "tree_shake": 210, "residual": 533, "core_symbols": "11/11" }
+  },
+  "system_completeness": {
+    "verdict_counts": { "complete": 5, "complete_with_ui_gap": 5, "incomplete": 1 },
+    "complete": ["HEALER", "CHIXIN", "DIANXIN", "NIANLI", "MEW"],
+    "complete_with_ui_gap": ["ERYOU", "TALENT", "SUPER_BACKPACK", "CONSTELLATION", "P5X"],
+    "incomplete": ["PT_SOUDACHE"],
+    "pt_soudache_gaps": {
+      "victory_flow_chars": 5000,
+      "victory_flow_methods": ["askSavePokemonUsage(2329)", "proceedWithVictory(1253)", "settlePtSoudacheInventory(1110)", "carryOutAwakeningStones(323)"],
+      "guardian_boss_sites": 19,
+      "start_phase_migrated": false,
+      "dangling_declares": 10
+    },
+    "note": "分层判据（路径③）要求「11 系统必须 100% 完整」—— 实测该条件不成立"
+  },
+  "deliverables": [
+    { "id": "B-12", "owner": "后端", "task": "走查证据包归档与体积治理", "status": "done" },
+    { "id": "B-13", "owner": "后端", "task": "通用回归一键化", "path": "tools/verify-all.cjs", "status": "done", "evidence": "8 套件 / 344 项 / 40.4s" },
+    { "id": "B-14", "owner": "后端", "task": "发布脚本端到端演练", "path": "docs/sourcemigration/B-14-发布演练.md", "status": "done", "evidence": "真实 756.8MB · 15/15" },
+    { "id": "B-15", "owner": "后端", "task": "真实 .prsv 样本 + 零依赖编解码器", "path": "tools/prsv.cjs", "status": "done", "evidence": "23/23；纠正 .prsv 为纯 AES（非 BlowFish）" },
+    { "id": "B-16", "owner": "后端", "task": "dist 卫生：剔除遗留打包文件", "path": "docs/sourcemigration/B-16-dist卫生.md", "status": "done" },
+
+    { "id": "U-9", "owner": "UI", "task": "i18n B1~B3 批次映射", "path": "docs/sourcemigration/i18n-b1~b3", "status": "done" },
+    { "id": "U-10", "owner": "UI", "task": "S7 施工清单", "path": "docs/delegation/35-UI-S7施工清单.md", "status": "done" },
+    { "id": "U-11", "owner": "UI", "task": "走查视觉判定标准", "path": "docs/delegation/33-UI-走查视觉判定标准.md", "status": "done", "note": "曾是 E-3 的阻塞项" },
+
+    { "id": "E-1", "owner": "全栈", "task": "低风险三批 + 11 系统完整性核查表", "path": "docs/sourcemigration/E-1-11系统完整性核查表.md", "status": "done", "evidence": "5 完整 / 5 UI缺口 / 1 不完整" },
+    { "id": "E-2", "owner": "全栈", "task": "M3 收口（L1 核销 + L2 台账 + L3 记录）", "status": "not_started" },
+    { "id": "E-3", "owner": "全栈", "task": "A4-01 全量画面走查", "status": "not_started", "note": "前置全部就绪" },
+    { "id": "E-4", "owner": "全栈", "task": "A4-04 回归 → M4", "status": "not_started" },
+    { "id": "E-5", "owner": "全栈", "task": "A5-01b 资源补全", "status": "not_started" },
+    { "id": "E-6", "owner": "全栈", "task": "A5-02 共用回归", "status": "not_started" },
+    { "id": "E-7", "owner": "全栈", "task": "A5-03b 交接 + 解除标注 → M5", "status": "not_started" },
+
+    { "id": "F-14", "owner": "前端", "task": "走查场景实现", "path": "docs/delegation/36-F14-走查场景实现交付报告.md", "status": "done", "evidence": "51/51 画面点 · 12 系统 · 五态裁定 · 闸门 43/51" },
+    { "id": "F-15", "owner": "前端", "task": "像素 diff 阈值调优", "status": "not_started", "note": "入口已铺好（judgement.mjs CLASS_THRESHOLDS）" },
+    { "id": "F-16", "owner": "前端", "task": "走查报告生成器", "status": "partial", "note": "report.json 结构化输入已就绪" },
+
+    { "id": "O-14", "owner": "所有者", "task": "推送", "status": "not_started", "note": "领先远程 11" },
+    { "id": "O-15", "owner": "所有者", "task": "mingzuo 授权", "status": "done", "evidence": "个人自用 ⇒ 不适用，风险关闭" },
+    { "id": "O-16", "owner": "所有者", "task": "对外透明度", "status": "done" }
+  ],
+  "milestones": [
+    { "id": "M1", "name": "可构建的上游", "status": "achieved", "phase": 1 },
+    { "id": "M2", "name": "魔改点清单", "status": "achieved", "phase": 1 },
+    { "id": "M3", "name": "源码含魔改", "status": "not_achieved", "note": "L1 仅 4/5（缺 L1-2 走查）；且 PT_SOUDACHE 不完整" },
+    { "id": "M4", "name": "等价性验证", "status": "not_achieved", "note": "E-3/E-4 未执行" },
+    { "id": "M5", "name": "产物切换", "status": "not_achieved", "note": "「未验证」标注仍在" },
+    { "id": "M6", "name": "输入层完成", "status": "not_started" },
+    { "id": "M7", "name": "视觉完成", "status": "not_started" },
+    { "id": "M8", "name": "发布管线就绪", "status": "not_started" },
+    { "id": "M9", "name": "可发布", "status": "not_started" }
+  ],
+  "key_findings": [
+    { "id": "PATTERN-3X", "desc": "连续三个阶段同一形态：建好使能件即阶段结束，验证执行从未开始（第四阶段 0/7、第五阶段 1/7）。根因是规划缺陷而非执行力", "severity": "critical" },
+    { "id": "PATH3-FALSE", "desc": "分层判据（路径③）的「11 系统必须 100% 完整」实测不成立：PT_SOUDACHE 不完整", "severity": "critical" },
+    { "id": "PT-GAP", "desc": "PT_SOUDACHE 缺口已量化：通关流程 4 方法 ≈5000 字符 + 守门员 19 处 + StartPhase 未迁 + 10 处悬空 declare", "severity": "high" },
+    { "id": "PRSV-AES", "desc": "`.prsv` 是**纯 AES** 不是 BlowFish；A4-03 §5 的补验路径②在追不存在的东西（压缩符号误判）", "severity": "high" },
+    { "id": "ROUTE-UNKNOWN", "desc": "51 画面点中 27 点 route 为 unknown（verified 2 / derived 22 / unknown 27）⇒ 直接跑会大量 unproven", "severity": "high" },
+    { "id": "FIVE-VERDICT", "desc": "五态裁定的 `blocked`（产物无该画面，不计失败）是让长流程走查能跑完的关键设计", "severity": "high" },
+    { "id": "ZERO-DECLARE-ISLAND", "desc": "5 个「完整」系统全是 0 declare 孤岛；5 个缺口系统的缺口全在 UI 层 —— 与第三阶段结论完全一致", "severity": "medium" },
+    { "id": "EVIDENCE-GROWTH", "desc": "evidence 从 2.5MB 长到 24MB，验证了第四阶段 gitignore 决策；全量走查后再增一个数量级可预期", "severity": "medium" },
+    { "id": "E15-P0", "desc": "talent-system 相关 14 处悬空 declare + safeT 引 63× 未定义 ⇒ 产品 B 黑屏；tsc/build/签名覆盖全查不出", "severity": "high" }
+  ],
+  "risks": {
+    "closed": [
+      { "id": "P5-R1", "name": "O-12 未按期定案", "closed_at": "2026-10-17", "evidence": "已裁定分层判据" },
+      { "id": "U11-BLOCK", "name": "U-11 阻塞 E-3", "closed_at": "2026-10-19", "evidence": "U-11 已交付" }
+    ],
+    "open": [
+      { "id": "N-1", "name": "PT_SOUDACHE 不完整（通关流程 ~5000 + 守门员 19 处）", "level": "high", "owner": "全栈", "carry_to": "phase-6" },
+      { "id": "N-2", "name": "27 点 route 为 unknown", "level": "high", "owner": "前端", "carry_to": "phase-6" },
+      { "id": "N-3", "name": "E-3 走查未执行", "level": "high", "owner": "全栈", "carry_to": "phase-6" },
+      { "id": "N-4", "name": "E-2 M3 收口 + L2 台账（446 项）", "level": "high", "owner": "全栈", "carry_to": "phase-6" },
+      { "id": "N-5", "name": "E-4 / E-5 / E-6 / E-7 未执行", "level": "high", "owner": "全栈", "carry_to": "phase-6" },
+      { "id": "N-6", "name": "F-15 diff 阈值未调", "level": "medium", "owner": "前端", "carry_to": "phase-6" },
+      { "id": "N-7", "name": "L2 中「~291 其余」未拆成逐条", "level": "medium", "owner": "全栈", "carry_to": "phase-6" },
+      { "id": "N-8", "name": "本地领先远程 11 提交", "level": "low", "owner": "项目所有者", "carry_to": "phase-6" }
+    ]
+  },
+  "next_phase": {
+    "id": "phase-6",
+    "name": "走查执行与 PT 收口",
+    "dispatch_doc": "docs/delegation/37-第六阶段任务分发.md",
+    "window": { "start": "2026-10-19", "end": "2026-10-30", "working_days": 10 },
+    "targets": ["M3 成立 @ 2026-10-26", "M4 @ 2026-10-28", "M5 @ 2026-10-30"],
+    "hard_constraint": "禁止新建任何工具/使能件/框架，只允许执行既有能力 + 修被暴露的缺陷；出口判据全部写成「跑通并产出数据」，不写「建成」"
+  }
+}
