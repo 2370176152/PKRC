@@ -19,12 +19,32 @@ function imgTag(file, outDir, caption) {
 
 function checksTable(checks) {
   const rows = checks
-    .map(
-      (c) =>
-        `<tr class="${c.pass ? "pass" : "fail"}"><td>${c.pass ? "✅" : "❌"}</td><td>${esc(c.name)}</td><td>${esc(c.detail)}</td></tr>`,
-    )
+    .map((c) => {
+      const mark = c.blocked ? "⛔" : c.pass ? "✅" : "❌";
+      const cls = c.blocked ? "blocked" : c.pass ? "pass" : "fail";
+      return `<tr class="${cls}"><td>${mark}</td><td>${esc(c.name)}</td><td>${esc(c.detail)}</td></tr>`;
+    })
     .join("");
   return `<table class="checks"><thead><tr><th>结果</th><th>检查项</th><th>说明</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/** F-14 四态裁定表（pass / fail / blocked / unreached） */
+function catalogBlock(productResult) {
+  const cat = productResult?.state?.catalog;
+  if (!cat || !cat.records) return "";
+  const c = cat.counts || {};
+  let html = `<h3>四态裁定 · 系统 <code>${esc(cat.system)}</code></h3>`;
+  html += `<p>pass <b>${c.pass ?? 0}</b> ｜ fail <b>${c.fail ?? 0}</b> ｜ unproven <b>${c.unproven ?? 0}</b> ｜ unreached <b>${c.unreached ?? 0}</b> ｜ blocked <b>${c.blocked ?? 0}</b></p>`;
+  html += `<p class="meta">blocked = 该画面在本产物中无实现（迁移缺口，进 L2/L3 台账，<b>不计走查失败</b>）；unproven = route 跑完但到达证明不足（弱证明），<b>不得据此声称已走查</b>，须 A4-01 补强证据；unreached = route 明确失败（待补路径）。</p>`;
+  const rows = cat.records
+    .map((r) => {
+      const cls = r.verdict === "pass" ? "pass" : r.verdict === "blocked" ? "blocked" : "fail";
+      const mark = { pass: "✅", fail: "❌", blocked: "⛔", unreached: "🚧", unproven: "❔" }[r.verdict] ?? "?";
+      return `<tr class="${cls}"><td>${mark}</td><td><code>${esc(r.id)}</code></td><td>${esc(r.label)}</td><td>${esc(r.verdict)}</td><td>${esc(r.class ?? "-")}</td><td>${esc(r.reachProof ?? "-")}</td><td>${esc(r.reason ?? "")}</td></tr>`;
+    })
+    .join("");
+  html += `<table class="checks"><thead><tr><th></th><th>画面点</th><th>名称</th><th>裁定</th><th>U-11 类别</th><th>到达证明</th><th>说明</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return html;
 }
 
 function diagBlock(d) {
@@ -84,6 +104,7 @@ export function writeHtmlReport(report, outDir, htmlPath) {
       body += `<h3>产物 ${id} — ${esc(r.label)}</h3>`;
       if (r.error) body += `<p class="fail">运行错误：${esc(r.error)}</p>`;
       body += checksTable(r.checks);
+      body += catalogBlock(r);
       body += diagBlock(r.diagnostics);
       for (const s of r.shots) body += imgTag(s.file, outDir, `${id} · ${s.name}`);
     }
@@ -92,6 +113,7 @@ export function writeHtmlReport(report, outDir, htmlPath) {
     body += `<p class="meta">场景 <code>${esc(r.scenario?.id)}</code> · 产物 <b>${esc(r.productId)}</b> ${esc(r.label)}</p>`;
     if (r.error) body += `<p class="fail">运行错误：${esc(r.error)}</p>`;
     body += `<h2>检查项</h2>${checksTable(r.checks)}`;
+    body += catalogBlock(r);
     body += `<h2>诊断</h2>${diagBlock(r.diagnostics)}`;
     body += `<h2>截图</h2>`;
     for (const s of r.shots) body += imgTag(s.file, outDir, `${s.name}（stdDev=${s.stats?.stdDev}）`);
@@ -114,6 +136,8 @@ export function writeHtmlReport(report, outDir, htmlPath) {
   tr.pass td:first-child{color:#137333}
   tr.fail{background:#fff5f5}
   tr.fail td:first-child{color:#c5221f}
+  tr.blocked{background:#fffbe6}
+  tr.blocked td:first-child{color:#8a6d00}
   .meta{color:#666}
   .ok{color:#137333}
   .fail{color:#c5221f;font-weight:600}

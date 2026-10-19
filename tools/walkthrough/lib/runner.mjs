@@ -151,11 +151,18 @@ export async function runProductScenario({ productId, scenario, outDir, options 
 
   const ctx = {
     product: productId,
+    url: server.url,
     session: null,
     options,
     log: (m) => logs.push(String(m)),
     check: (name, pass, detail) => checks.push({ name, pass: !!pass, detail: detail ?? "" }),
     point: (name, pass, detail) => checks.push({ name, pass: !!pass, detail: detail ?? "", point: true }),
+    /**
+     * F-14：**阻塞**项 —— 该画面在本产物里压根没有实现（gate 未命中）。
+     * 与「走查不过」是两件事：阻塞 = 迁移缺口，应进 L2/L3 台账；
+     * 因此 `pass:true`（不计失败），但打 `blocked` 标记供报告单列。
+     */
+    blocked: (name, detail) => checks.push({ name, pass: true, blocked: true, detail: detail ?? "", point: true }),
     shot: async (name) => {
       const png = await ctx.session.screenshot();
       const file = `${name}.png`;
@@ -178,6 +185,7 @@ export async function runProductScenario({ productId, scenario, outDir, options 
 
   const result = {
     productId,
+    url: server.url,
     label: PRODUCTS[productId]?.label,
     roots,
     fingerprint: productFingerprint(productId),
