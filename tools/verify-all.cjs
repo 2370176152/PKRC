@@ -176,6 +176,18 @@ const SUITES = [
     min: 13,
     countRe: /总计：(\d+)\s*通过/,
   },
+  {
+    // .prsv 编解码器（B-15）：已知答案向量 + OpenSSL 逐字节比对。
+    // 真实存档用例在 .build-tools 不存在时按 skip 处理，故项数下限取不含真实样本的 21。
+    id: "prsv",
+    name: "prsv 编解码",
+    required: false,
+    node: "runtime",
+    file: "tools/test-prsv.cjs",
+    cwd: ".",
+    min: 21,
+    countRe: /总计：(\d+)\s*通过/,
+  },
 ];
 
 // ---------------------------------------------------------------------------

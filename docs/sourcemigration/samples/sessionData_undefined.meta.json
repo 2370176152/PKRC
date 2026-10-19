@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-19T01:58:25.477Z",
+  "origin": "node-codec",
+  "originDetail": "产物未暴露 window.CryptoJS，退回归 Node 实现生成（等价于派单④的降级方案）",
+  "content": "synthetic",
+  "plaintextPath": "docs/sourcemigration/samples/sessionData_undefined.json",
+  "psvPath": "docs/sourcemigration/samples/sessionData_undefined.prsv",
+  "psvCommitted": false,
+  "psvWhy": "`*.prsv` 被 .gitignore:29 忽略（防止误提交玩家存档，是有意的规则）；本样本可 100% 由明文重建",
+  "regenCommand": "node tools/prsv.cjs encrypt docs/sourcemigration/samples/sessionData_undefined.json --out=docs/sourcemigration/samples/sessionData_undefined.prsv",
+  "saveKey": "x0i2O7WRiANTqPmZ",
+  "localStorageKey": "sessionData_undefined",
+  "bytes": {
+    "plaintext": 763,
+    "cipher": 1048
+  },
+  "sha256": {
+    "plaintext": "ed64b85c6f7777305d93174fc49f8938ef67d784ac517fa6a4ecbe12f9d27a08",
+    "cipherOnce": "379e7d94ad63f43dc134db7a93d3d868ad59289fe50b0b164855f63eab072bec",
+    "cipherNote": "随机 salt ⇒ 密文不可复现；要校验重建结果请比对 sha256.plaintext，不要比对密文"
+  },
+  "crossCheck": {
+    "productCryptoJs": "undefined",
+    "productEncryptProducesPsv": false,
+    "productDecryptsNodeCipher": null,
+    "productSelfRoundtrip": null,
+    "twoEncryptsDiffer": null,
+    "nodeDecryptsProductCipher": "OK",
+    "injectedLocalStorageDecodesBack": true
+  },
+  "roundtripCriterion": {
+    "wrong": "export1 字节 === export2 字节  —— 不可能成立（每次随机 salt）",
+    "right": "decrypt(export1) === decrypt(export2)（明文逐字节）或 structurallyEqual(明文)"
+  },
+  "product": {
+    "id": "A",
+    "label": "modder 原产物",
+    "roots": [
+      "D:\\Work\\Pokemon\\new\\game\\server\\dist.modder-backup-20261016",
+      "D:\\Work\\Pokemon\\new\\game\\server\\dist"
+    ]
+  },
+  "probeError": null
+}
