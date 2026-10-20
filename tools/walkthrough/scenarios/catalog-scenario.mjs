@@ -7,7 +7,7 @@
  *   ① **真正导航**：用 `lib/route.mjs` 的步骤数组到达，而不是「什么都不做直接截图」。
  *   ② **闸门前置**：先查 `lib/gates.mjs` —— 该画面在本产物里有没有实现。
  *      未实现 ⇒ 记 `blocked`（迁移缺口，进台账），**不当成走查失败**。
- *   ③ **四态裁定**：pass / fail / blocked / unreached —— 替代原来的二元 pass/fail。
+ *   ③ **多态裁定**：pass / fail / unproven / unreached / unreachable / blocked —— 替代原来的二元 pass/fail。
  *
  * 裁定口径（务必与 P5-R3 / P5-R5 对齐）：
  *   blocked    产物里没有这个画面的代码（gate 未命中）→ 迁移缺口，**不是**走查结论
@@ -132,6 +132,24 @@ export async function walkSystem(ctx, systemId) {
     if (!gate.present) {
       ctx.blocked(`[${sys.id}] ${pt.id} ${pt.label}`, `blocked：${gate.reason}${j ? ` ｜ 类别 ${j.class}` : ""}`);
       records.push({ id: pt.id, label: pt.label, verdict: "blocked", reason: gate.reason, class: j?.class ?? null, ai: !!j?.ai, keyFrame: !!j?.keyFrame });
+      continue;
+    }
+
+    // H-8：已明确定性为「本框架不可自动到达」的点 —— 不去假装能到
+    if (pt.routeReliability === "unreachable") {
+      const reason = `已定性不可自动到达（${pt.unreachableKind}）：${pt.routeEvidence}`;
+      ctx.blocked(`[${sys.id}] ${pt.id} ${pt.label}`, `unreachable：${pt.unreachableKind}`);
+      records.push({
+        id: pt.id,
+        label: pt.label,
+        verdict: "unreachable",
+        reason,
+        unreachableKind: pt.unreachableKind,
+        class: j?.class ?? null,
+        ai: !!j?.ai,
+        keyFrame: !!j?.keyFrame,
+        reachProof: "none",
+      });
       continue;
     }
 
@@ -264,14 +282,14 @@ export async function walkSystem(ctx, systemId) {
   const counts = tally(records);
   ctx.state.catalog = { system: sys.id, label: sys.label, ready: true, total: sys.points.length, counts, records };
   ctx.check(
-    `[${sys.id}] 走查完成（pass ${counts.pass} / fail ${counts.fail} / unproven ${counts.unproven} / unreached ${counts.unreached} / blocked ${counts.blocked}）`,
+    `[${sys.id}] 走查完成（pass ${counts.pass} / fail ${counts.fail} / unproven ${counts.unproven} / unreached ${counts.unreached} / unreachable ${counts.unreachable} / blocked ${counts.blocked}）`,
     counts.fail === 0 && counts.unreached === 0,
-    `blocked ${counts.blocked} 项 = 产物无该画面（迁移缺口，进 L2/L3 台账）；unproven ${counts.unproven} 项 = 到达未证实（须 A4-01 补强证据）；两者均不计走查失败`,
+    `blocked = 产物无该画面（迁移缺口，进 L2/L3）；unreachable = 已定性不可自动到达（H-8）；unproven = 到达未证实（须 A4-01 补强）；三者均不计走查失败`,
   );
 }
 
 function tally(records) {
-  const c = { pass: 0, fail: 0, unproven: 0, unreached: 0, blocked: 0 };
+  const c = { pass: 0, fail: 0, unproven: 0, unreached: 0, unreachable: 0, blocked: 0 };
   for (const r of records) c[r.verdict] = (c[r.verdict] ?? 0) + 1;
   return c;
 }

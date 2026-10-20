@@ -752,6 +752,218 @@ export const CATALOG = [
 ];
 
 // ---------------------------------------------------------------------------
+// H-8 · 27 个原 `unknown` 点的定性（第六阶段 · 派单 37 §三）
+// ---------------------------------------------------------------------------
+/**
+ * 依据来源（**实测反解 A 产物**，非猜测）：
+ *   A 产物的 `this.handlers` 是**密集索引**数组，共 64 项：
+ *     0..47 = 上游 48 个 handler；**48..63 = mod 追加的 16 个 handler**：
+ *       48 TalentViewer · 49 TalentCodex · 50 SuperBackpack · 51 (未解析) · 52 Jieming
+ *       53 EryouReward · 54 EryouProgression · 55 EryouLevelUp · 56 EryouEvolve
+ *       57 EryouHeldItem · 58 EryouSynthesis · 59 EryouGuide · 60 EryouTraining
+ *       61 EryouLobby · 62 EryouSpeciesSearch · 63 EryouHeldSynthesis
+ *   A 产物的 `MenuOptions` 枚举（含 mod 追加 2 项，其余整体后移 2）：
+ *     GAME_SETTINGS=0 · ACHIEVEMENTS=1 · STATS=2 · **CURRENT_TALENTS=3** · **TALENT_CODEX=4**
+ *     · EGG_LIST=5 · EGG_GACHA=6 · POKEDEX=7 · MANAGE_DATA=8 · COMMUNITY=9 · SAVE_AND_QUIT=10 · LOG_OUT=11
+ *     ⇒ MenuUiHandler `case 3` → `setOverlayMode(V.TALENT_VIEWER)`，`case 4` → `V.TALENT_CODEX`（且 **case 3 要求 `currentBattle`**，即仅 run 内可用）
+ *   A 产物的 `UiMode` 上真实存在的 18 个 mod 键：TALENT_VIEWER/TALENT_CODEX/TALENT_SHOP/SUPER_BACKPACK/
+ *     PT_CONSTELLATION/JIEMING/PT_SOUDACHE_START + ERYOU_{REWARD,PROGRESSION,LEVELUP,EVOLVE,HELD_ITEM,
+ *     SYNTHESIS,GUIDE,TRAINING,LOBBY,SEARCH,HELD_SYNTHESIS}
+ *   实测：**mod 没有任何自定义热键**（A 产物里 `addKey` 只有上游 SHIFT/DELETE/HOME）
+ *     ⇒ 所有 mod 界面只能经「菜单 / phase / 战斗内事件」进入，无法用按键直达。
+ *
+ * 定性口径（H-8 验收 ①：能实测→verified；有代码依据→derived；确实到不了→unreachable + 原因）：
+ *   derived      —— 有明确代码依据（战斗内被动调用 / Phase 自动进入 / 上游菜单项），
+ *                   **到达由 `--inject` 的存档状态保证**（`reachProof: inject`），未逐点实测
+ *   unreachable  —— 本走查框架**无法自动到达**（≠ 产品不可达）。`unreachableKind` 记原因类别：
+ *                   · `ui-handler-not-wired`  依赖的 mod UiHandler 在源码化产物未接 UI 注册表，
+ *                                             B 侧无该界面；A 侧存在但无源码依据可推导
+ *                   · `private-cursor-index`  A 侧可达，但需 mod 私有 lobby 内游标索引，源码无该顺序
+ *                   · `no-deterministic-state` 需随机/偶发状态（传说遭遇等），无确定性注入样本
+ */
+const ROUTE_OVERRIDES = {
+  // ── 战斗内被动触发（无需导航；`--inject` 真存档即到达）────────────────────
+  "talent.acquire-toast": {
+    routeReliability: "derived",
+    routeEvidence: "获得天赋后由 runInstantEffect/提示链自动弹出（战斗内事件，无导航）",
+  },
+  "talent.xingxiang": {
+    routeReliability: "derived",
+    routeEvidence: "switchXingxiang 触发播报（战斗内事件；星象状态由存档携带）",
+  },
+  "healer.wish": {
+    routeReliability: "derived",
+    routeEvidence: "HealerWishPhase 为已注册 Phase，战斗流程内自动进入（mod-init: registerHealerSystem）",
+  },
+  "nianli.stacks": {
+    routeReliability: "derived",
+    routeEvidence: "层数 HUD 随获得层数自动刷新（战斗内被动）",
+  },
+  "nianli.burst": {
+    routeReliability: "derived",
+    routeEvidence: "NianLiBurstEndPhase 已注册 PHASES，战斗结算自动进入",
+  },
+  "p5x.turnorder": {
+    routeReliability: "derived",
+    routeEvidence: "ensureP5XTurnOrderBar/updateP5XTurnOrderBar 由回合流程被动调用（mod-init 注：p5x 无需注册）",
+  },
+  "p5x.turnorder.hide": {
+    routeReliability: "derived",
+    routeEvidence: "hideP5XTurnOrderBar 在战斗结束时被动调用（同一被动链）",
+  },
+  "p5x.effect": {
+    routeReliability: "derived",
+    routeEvidence: "applyP5XEffect 为被动调用（mod-init 明确「效果框架被动，无需注册」）",
+  },
+  "callingcard.gauge": {
+    routeReliability: "derived",
+    routeEvidence: "container_calling_card_gauge 在呼符累计时创建（战斗内被动）",
+  },
+  "callingcard.resolve": {
+    routeReliability: "derived",
+    routeEvidence: "CallingCardResolvePhase 由 handleFightCommand 末 unshift（额外回合链，战斗内自动）",
+  },
+  "dianxin.echo": {
+    routeReliability: "derived",
+    routeEvidence: "DianXinEchoEndPhase 已注册 PHASES，战斗内自动进入",
+  },
+  "jieming.turnorder": {
+    routeReliability: "derived",
+    routeEvidence: "与 p5x.turnorder 同组件家族（顺序条被动刷新）",
+  },
+  "misc.terrain.chengfeng": {
+    routeReliability: "derived",
+    routeEvidence: "ChengfengTag 为 arena tag，触发即以 add 进场（战斗内自动）",
+  },
+  "misc.terrain.kongjian": {
+    routeReliability: "derived",
+    routeEvidence: "KONGJIANRoomTag 同上",
+  },
+  "misc.mew": {
+    routeReliability: "derived",
+    routeEvidence: "registerMewSystem/registerMewStatusProvider 已在 mod-init 接线（战斗内被动）",
+  },
+  "misc.pt.hud": {
+    routeReliability: "derived",
+    routeEvidence: "V.PT_SOUDACHE_START 由 PtSoudacheStartPhase.start() 自动 setMode ⇒ 进入 PT 模式即 HUD 在位",
+  },
+  // ── ERYOU 模式级（入口是 GameModes.ERYOU=12，A 产物 case 12 => 「二游模式」）──
+  "eryou.battle": {
+    routeReliability: "derived",
+    routeEvidence: "GameModes.ERYOU=12（A 产物 GameMode.getName(): case 12 => 「二游模式」）⇒ 存档处于 ERYOU 模式即进入深渊战斗",
+  },
+  "eryou.abyss-buff": {
+    routeReliability: "derived",
+    routeEvidence: "abyssAttackBuffMultiplier 在深渊伤害计算中被被动调用（F-11 已迁）",
+  },
+
+  // ── 本框架无法自动到达（≠ 产品不可达）────────────────────────────────────
+  "eryou.synthesis": {
+    routeReliability: "unreachable",
+    unreachableKind: "private-cursor-index",
+    routeEvidence:
+      "需在 ERYOU 会话内进入 V.ERYOU_SYNTHESIS / V.ERYOU_HELD_SYNTHESIS 子页；A 产物由 openEryouLobby 的游标驱动，源码化产物 ui.ts 未接线 16 个 mod handler ⇒ 无双方共有可脚本化路径",
+  },
+  "eryou.shop": {
+    routeReliability: "unreachable",
+    unreachableKind: "private-cursor-index",
+    routeEvidence: "深渊商店为 ERYOU lobby 子页，需私有游标索引；同 eryou.synthesis",
+  },
+  "pt.shop": {
+    routeReliability: "unreachable",
+    unreachableKind: "private-cursor-index",
+    routeEvidence: "PtSoudacheShopPhase 需在 PT 一轮中途进入，游标索引无源码依据",
+  },
+  "pt.settle": {
+    routeReliability: "unreachable",
+    unreachableKind: "private-cursor-index",
+    routeEvidence: "需完整跑完一轮 PT 才进结算；单次走查无法确定性产出该状态",
+  },
+  "legendary.popup": {
+    routeReliability: "unreachable",
+    unreachableKind: "no-deterministic-state",
+    routeEvidence: "传说弹窗由传说遭遇触发，遭遇内容随机；当前无可确定性注入的遭遇样本",
+  },
+  "legendary.helper": {
+    routeReliability: "unreachable",
+    unreachableKind: "no-deterministic-state",
+    routeEvidence: "依赖 legendary.popup 同一随机遭遇",
+  },
+  "misc.constellation.codex": {
+    routeReliability: "unreachable",
+    unreachableKind: "ui-handler-not-wired",
+    routeEvidence:
+      "A 产物在 STARTER_SELECT 内以 setOverlayMode(V.PT_CONSTELLATION) 打开命座；源码化产物 PtConstellationUiHandler 未接 UI 注册表（mod-init 挂账）⇒ B 无此界面",
+  },
+  "misc.constellation.node": {
+    routeReliability: "unreachable",
+    unreachableKind: "ui-handler-not-wired",
+    routeEvidence: "同 misc.constellation.codex（节点面板为同一 overlay 的子视图）",
+  },
+  "misc.super-backpack": {
+    routeReliability: "unreachable",
+    unreachableKind: "ui-handler-not-wired",
+    routeEvidence:
+      "A 产物 setMode(V.SUPER_BACKPACK) 只出现在特定道具使用链（Pokemon 复原/形态变化）内，无菜单入口；且 SuperBackpackUiHandler 在源码化产物未接线",
+  },
+};
+
+// F-14 已定性为 derived 的点补齐「依据」（H-8：非 verified 必须可追溯）
+const EVIDENCE_ONLY = {
+  "boot.lang-select": "A 产物 MenuOptions 实测：GAME_SETTINGS=0（MenuUiHandler 第 0 项）→ 设置 → 显示/语言；二级子项索引未实测",
+  "talent.codex": "A 产物 MenuOptions 实测：CURRENT_TALENTS=3（mod 插入项）→ MenuUiHandler case 3 => setOverlayMode(V.TALENT_VIEWER)，且 case 3 要求 currentBattle（仅 run 内可用）",
+  "talent.shop": "A 产物存在 V.TALENT_SHOP，由天赋商店调用点 setMode(V.TALENT_SHOP,pool,cost,count,...) 打开；入口在 run 内天赋/商店流，具体选项索引未实测",
+  "talent.runtime-hud": "setTalentRuntimeHudText 在战斗内被动刷新（A 产物 4 处调用）",
+  "talent.age.ice": "年代天赋命中后按 POST_TARGET 触发 AOE 结算与播报（talent-system 被动链）",
+  "talent.age.stone": "同 ice，换石器时代标记",
+  "talent.age.industrial": "同 ice，换工业时代标记",
+  "talent.age.info": "同 ice；A/B 均含 xinxiwenming 标记（B 3 次 ⇒ 该时代逻辑已进 bundle）",
+  "talent.age.totem": "同 ice，换图腾时代标记",
+  "talent.yijianqingyuan": "一剑清源增伤走伤害乘区被动计算（yijian_qingyuan 标记 A 5 / B 2）",
+  "pt.start": "A 产物 PtSoudacheStartPhase.start() 内 setMode(V.PT_SOUDACHE_START) ⇒ 进入 PT 模式即达，无需额外导航",
+  "jieming.shield": "解明盾由 registerJiemingShieldExpireHandler / SeaGuard 模块在战斗内加盾（mod-init 已接线）",
+  "jieming.skill": "解明招式演出随招式使用被动播放（jieming-anims chunk）",
+  "healer.seaguard": "applySeaGuardOpening 在战斗开始铺层（registerSeaGuardSystem 已在 mod-init 接线）",
+  "callingcard.command": "呼符按钮由命令菜单在战斗内动态加入（CallingCard 额外回合链）",
+  "misc.challenge.select": "上游原生 GameChallengesUiHandler（UiMode.CHALLENGE_SELECT），新游戏流程内可达；两产物均存在",
+  "misc.challenge.same-pokemon": "同 select；SamePokemonChallenge 为 mod 追加挑战项",
+  "misc.challenge.suiji": "同 select；SuijiChallenge 随机化需固定种子才可比（--inject）",
+  "misc.challenge.triple-passive": "同 select；TriplePassiveChallenge 为 mod 追加项",
+  "misc.challenge.wu": "同 select；WuChallenge 为 mod 追加项",
+  "misc.meloetta": "onMeloettaWaveStart 在波次开始被动触发（registerMeloettaSystem 已接线）",
+  "misc.manaphy": "manaphy 系效果在战斗内被动触发（registerSeaGuardSystem 已接线）",
+};
+for (const sys of CATALOG) {
+  for (const pt of sys.points) {
+    if (EVIDENCE_ONLY[pt.id] && !pt.routeEvidence) pt.routeEvidence = EVIDENCE_ONLY[pt.id];
+  }
+}
+
+// 应用覆盖：把定性写回每个 point（保持逐点数据在 point 上，便于 H-2/E-3 消费）
+for (const sys of CATALOG) {
+  for (const pt of sys.points) {
+    const ov = ROUTE_OVERRIDES[pt.id];
+    if (ov) Object.assign(pt, ov);
+  }
+}
+
+/** 定性汇总（`--validate` / `--systems` 用） */
+export function routeReliabilityStats() {
+  const by = { verified: 0, derived: 0, unreachable: 0, unknown: 0 };
+  const unreachableKinds = {};
+  for (const sys of CATALOG) {
+    for (const p of sys.points) {
+      by[p.routeReliability] = (by[p.routeReliability] ?? 0) + 1;
+      if (p.routeReliability === "unreachable") {
+        const k = p.unreachableKind ?? "unspecified";
+        unreachableKinds[k] = (unreachableKinds[k] ?? 0) + 1;
+      }
+    }
+  }
+  return { by, unreachableKinds };
+}
+
+// ---------------------------------------------------------------------------
 // 查询 / 统计
 // ---------------------------------------------------------------------------
 
@@ -768,6 +980,7 @@ export function listSystems() {
     label: s.label,
     points: s.points.length,
     derived: s.points.filter((p) => p.routeReliability === "derived").length,
+    unreachable: s.points.filter((p) => p.routeReliability === "unreachable").length,
     unknown: s.points.filter((p) => p.routeReliability === "unknown").length,
   }));
 }
@@ -779,7 +992,7 @@ export function allPoints() {
 export function catalogStats() {
   const total = CATALOG.reduce((n, s) => n + s.points.length, 0);
   const verified = CATALOG.reduce((n, s) => n + s.points.filter((p) => p.reachability === "verified").length, 0);
-  const byReliability = { verified: 0, derived: 0, unknown: 0 };
+  const byReliability = { verified: 0, derived: 0, unreachable: 0, unknown: 0 };
   for (const s of CATALOG) for (const p of s.points) byReliability[p.routeReliability] = (byReliability[p.routeReliability] ?? 0) + 1;
   const gated = CATALOG.reduce((n, s) => n + s.points.filter((p) => !!p.gate).length, 0);
   return { systems: CATALOG.length, total, verified, designed: total - verified, byReliability, gated, ungated: total - gated };

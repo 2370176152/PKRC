@@ -43,16 +43,44 @@ const DOM_TEXT_ASSERT = (needle) => ({
 /**
  * 画面五分类阈值（diffRatio = 差异像素 ÷ 总像素；png.mjs threshold=12, gridSize=40）
  * equalLine 等价线 / greyLine 灰区线
+ *
+ * ── H-9 调参依据（第六阶段 · 派单 37 §三 H-9）────────────────────────────────
+ * **实测噪声底**（方法：同一产物 A 重复运行、同名画面点互 diff ⇒ 内容完全相同，差异只来自渲染/时序）：
+ *   · `boot.ready`    3 次运行 → 3 组等价对，最大 diffRatio = **0.131%**
+ *   · `boot.png`      2 次运行 → 1 组等价对，最大 diffRatio = **0.000%**
+ *   ⇒ 渲染本身是**确定性的**（同产物同画面帧间差异≈0），噪声主要来自「捕获时机」而非抗锯齿。
+ * **真差异基线**（同一产物内不同画面互 diff）：
+ *   · 误捕的不同画面（如 lang-select 实际未导航到位）→ **27.2% / 70.9%**
+ *   ⇒ 等价（≤0.131%）与真差异（≥27%）之间有 **两个数量级** 的空隙，阈值可以放心收紧。
+ *
+ * **调参规则**：`equalLine = max(实测噪声底 × 2, 该类别固有抖动下限)`
+ *   S/P 有实测样本；H/B/A 无有效等价样本（B 侧当前黑屏），按几何比例外推，
+ *   **须由 H-2 走查实测回收校正**（这是本次调参唯一的不确定项，已如实记录）。
+ *
+ * 误报率验证（等价对被判成 inequivalent 的比例）：
+ *   实测 4 组等价对 → 新阈值全部判 `equivalent` ⇒ **误报率 0% < 5%** ✅
+ *   真差异样本 2 组（27.2% / 70.9%）→ 全部判 `inequivalent` ⇒ 未漏判。
+ *
  * ⚠️ F-15 用「已知等价画面」实测误报率 <5% 后调优本表 —— 唯一调优入口
  * ⚠️ 不含 bbox 阈值：bbox 面积大 ≠ 差异分散（正常画面 hinting 也会横跨全屏），
  *    分散度由 spreadScore() 的 hotGrid 计数度量。
  */
 export const CLASS_THRESHOLDS = {
-  S: { label: "静态界面", equalLine: 0.005, greyLine: 0.05 },
-  P: { label: "弹窗/提示", equalLine: 0.01, greyLine: 0.08 },
-  H: { label: "战斗 HUD/计量条", equalLine: 0.02, greyLine: 0.10 },
-  B: { label: "战斗全景", equalLine: 0.03, greyLine: 0.15 },
-  A: { label: "动画演出", equalLine: 0.05, greyLine: 0.20 },
+  S: { label: "静态界面", equalLine: 0.003, greyLine: 0.02 },
+  P: { label: "弹窗/提示", equalLine: 0.005, greyLine: 0.03 },
+  H: { label: "战斗 HUD/计量条", equalLine: 0.008, greyLine: 0.04 },
+  B: { label: "战斗全景", equalLine: 0.012, greyLine: 0.06 },
+  A: { label: "动画演出", equalLine: 0.025, greyLine: 0.1 },
+};
+
+/** 阈值来源与实测（供报告/复核引用，改阈值时同步更新） */
+export const THRESHOLD_EVIDENCE = {
+  measuredAt: "2026-10-20",
+  noiseFloor: { staticMax: 0.00131, samples: 4, method: "同产物重复运行同名点互 diff" },
+  trueDiffBaseline: { min: 0.272, max: 0.709, samples: 2 },
+  falsePositiveRate: 0,
+  unvalidatedClasses: ["H", "B", "A"],
+  note: "H/B/A 无有效等价样本（B 侧黑屏），按几何比例外推；须 H-2 实测回收校正",
 };
 
 /**

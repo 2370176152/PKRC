@@ -28,18 +28,18 @@ function checksTable(checks) {
   return `<table class="checks"><thead><tr><th>结果</th><th>检查项</th><th>说明</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-/** F-14 四态裁定表（pass / fail / blocked / unreached） */
+/** F-14 / H-8 裁定分布表（pass / fail / unproven / unreached / unreachable / blocked） */
 function catalogBlock(productResult) {
   const cat = productResult?.state?.catalog;
   if (!cat || !cat.records) return "";
   const c = cat.counts || {};
-  let html = `<h3>四态裁定 · 系统 <code>${esc(cat.system)}</code></h3>`;
-  html += `<p>pass <b>${c.pass ?? 0}</b> ｜ fail <b>${c.fail ?? 0}</b> ｜ unproven <b>${c.unproven ?? 0}</b> ｜ unreached <b>${c.unreached ?? 0}</b> ｜ blocked <b>${c.blocked ?? 0}</b></p>`;
-  html += `<p class="meta">blocked = 该画面在本产物中无实现（迁移缺口，进 L2/L3 台账，<b>不计走查失败</b>）；unproven = route 跑完但到达证明不足（弱证明），<b>不得据此声称已走查</b>，须 A4-01 补强证据；unreached = route 明确失败（待补路径）。</p>`;
+  let html = `<h3>裁定分布 · 系统 <code>${esc(cat.system)}</code></h3>`;
+  html += `<p>pass <b>${c.pass ?? 0}</b> ｜ fail <b>${c.fail ?? 0}</b> ｜ unproven <b>${c.unproven ?? 0}</b> ｜ unreached <b>${c.unreached ?? 0}</b> ｜ unreachable <b>${c.unreachable ?? 0}</b> ｜ blocked <b>${c.blocked ?? 0}</b></p>`;
+  html += `<p class="meta">blocked = 该画面在本产物中无实现（迁移缺口，进 L2/L3 台账，<b>不计走查失败</b>）；unreachable = 已定性为本框架不可自动到达（H-8，附原因类别）；unproven = route 跑完但到达证明不足（弱证明），<b>不得据此声称已走查</b>；unreached = route 明确失败（待补路径）。</p>`;
   const rows = cat.records
     .map((r) => {
-      const cls = r.verdict === "pass" ? "pass" : r.verdict === "blocked" ? "blocked" : "fail";
-      const mark = { pass: "✅", fail: "❌", blocked: "⛔", unreached: "🚧", unproven: "❔" }[r.verdict] ?? "?";
+      const cls = r.verdict === "pass" ? "pass" : r.verdict === "blocked" || r.verdict === "unreachable" ? "blocked" : "fail";
+      const mark = { pass: "✅", fail: "❌", blocked: "⛔", unreachable: "⛔", unreached: "🚧", unproven: "❔" }[r.verdict] ?? "?";
       return `<tr class="${cls}"><td>${mark}</td><td><code>${esc(r.id)}</code></td><td>${esc(r.label)}</td><td>${esc(r.verdict)}</td><td>${esc(r.class ?? "-")}</td><td>${esc(r.reachProof ?? "-")}</td><td>${esc(r.reason ?? "")}</td></tr>`;
     })
     .join("");

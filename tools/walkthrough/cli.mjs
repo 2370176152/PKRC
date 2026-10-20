@@ -34,7 +34,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { runProductScenario, runDualScenario, scenarioMeta } from "./lib/runner.mjs";
 import { listScenarios, getScenario, SCENARIOS } from "./scenarios/index.mjs";
-import { CATALOG, listSystems, catalogStats, allPoints } from "./scenarios/catalog.mjs";
+import { CATALOG, listSystems, catalogStats, allPoints, routeReliabilityStats } from "./scenarios/catalog.mjs";
 import { probeCatalog, summarizeProbe, productCorpus } from "./lib/gates.mjs";
 import { JUDGEMENTS, judgementStats } from "./lib/judgement.mjs";
 import { writeHtmlReport } from "./lib/report.mjs";
@@ -55,20 +55,23 @@ if (args.list) {
 
 if (args.systems) {
   const st = catalogStats();
+  const rs = routeReliabilityStats();
   console.log(`F-12 走查目录：${st.systems} 组 / ${st.total} 个画面点（verified ${st.verified} · designed ${st.designed}）`);
-  console.log(`route 可靠性：verified ${st.byReliability.verified} · derived ${st.byReliability.derived} · unknown ${st.byReliability.unknown}`);
+  console.log(
+    `route 定性（H-8）：verified ${rs.by.verified} · derived ${rs.by.derived} · unreachable ${rs.by.unreachable} · unknown ${rs.by.unknown}`,
+  );
   console.log(`闸门：${st.gated} 点已声明 gate · ${st.ungated} 点无 gate（默认可达）\n`);
-  console.log("  --system <id>      代号          点数  derived unknown  场景 id            名称");
+  console.log("  --system <id>      代号          点数  derived  unreach  场景 id            名称");
   for (const s of listSystems()) {
     console.log(
-      `  ${s.id.padEnd(18)} ${String(s.code).padEnd(14)} ${String(s.points).padStart(3)}  ${String(s.derived).padStart(7)} ${String(s.unknown).padStart(7)}  ${("sys-" + s.id).padEnd(18)} ${s.label}`,
+      `  ${s.id.padEnd(18)} ${String(s.code).padEnd(14)} ${String(s.points).padStart(3)}  ${String(s.derived).padStart(7)} ${String(s.unreachable).padStart(8)}  ${("sys-" + s.id).padEnd(18)} ${s.label}`,
     );
   }
   process.exit(0);
 }
 
 // ---------------------------------------------------------------------------
-// --validate：目录完整性静态自检（F-14 验收 ①「覆盖全部可截图点」，不启浏览器）
+// --validate：目录完整性静态自检（F-14 验收 ① + H-8 验收 ②「unknown 归零」）
 // ---------------------------------------------------------------------------
 if (args.validate) {
   const problems = [];
@@ -82,15 +85,24 @@ if (args.validate) {
     seen.add(p.id);
   }
 
-  // 2) 每个点必有 route（数组）+ routeReliability
-  const RELIABILITY = new Set(["verified", "derived", "unknown"]);
+  // 2) 每个点必有 route（数组）+ 合法 routeReliability + arrival
+  const RELIABILITY = new Set(["verified", "derived", "unreachable"]);
   for (const p of points) {
     if (!Array.isArray(p.route)) problems.push(`${p.id}：缺 route 数组`);
     else if (p.route.length === 0 && p.routeReliability !== "verified") {
       problems.push(`${p.id}：route 为空，但 routeReliability=${p.routeReliability}（非 verified 的空 route 等于「假实现」）`);
     }
-    if (!RELIABILITY.has(p.routeReliability)) problems.push(`${p.id}：routeReliability 非法（${p.routeReliability}）`);
+    if (!RELIABILITY.has(p.routeReliability)) {
+      problems.push(`${p.id}：routeReliability 非法（${p.routeReliability}）—— unknown 必须在 H-8 定性为 derived/unreachable`);
+    }
     if (!p.arrival) problems.push(`${p.id}：缺 arrival 描述`);
+    // H-8：非 verified 必须有代码依据
+    if (p.routeReliability !== "verified" && !p.routeEvidence) {
+      problems.push(`${p.id}：${p.routeReliability} 但缺 routeEvidence（定性必须可追溯）`);
+    }
+    if (p.routeReliability === "unreachable" && !p.unreachableKind) {
+      problems.push(`${p.id}：unreachable 但缺 unreachableKind`);
+    }
   }
 
   // 3) U-11 判定条目双向对齐
@@ -104,13 +116,19 @@ if (args.validate) {
   }
 
   // 5) 无 gate 的点给个提示（不阻断）
-  for (const p of points) if (!p.gate) warn.push(`${p.id}：未声明 gate（默认可达 —— 若实际不可达，走查会记 unreached）`);
+  for (const p of points) if (!p.gate) warn.push(`${p.id}：未声明 gate（默认可达）`);
 
   const st = catalogStats();
+  const rs = routeReliabilityStats();
   const js = judgementStats();
-  console.log("== F-14 目录静态自检 ==");
+  console.log("== F-14 / H-8 目录静态自检 ==");
   console.log(`画面点：${st.total}（系统 ${st.systems}）｜ U-11 判定条目：${js.points}`);
-  console.log(`路由可靠性：verified ${st.byReliability.verified} · derived ${st.byReliability.derived} · unknown ${st.byReliability.unknown}`);
+  console.log(
+    `route 可靠性：verified ${rs.by.verified} · derived ${rs.by.derived} · unreachable ${rs.by.unreachable} · **unknown ${rs.by.unknown}**`,
+  );
+  if (rs.by.unreachable) {
+    console.log(`  unreachable 原因分布：` + Object.entries(rs.unreachableKinds).map(([k, v]) => `${k} ${v}`).join(" · "));
+  }
   console.log(`闸门覆盖：${st.gated}/${st.total} 点已声明`);
   console.log(`按系统场景：${CATALOG.filter((s) => SCENARIOS[`sys-${s.id}`]).length}/${CATALOG.length}`);
   console.log("");
@@ -124,7 +142,9 @@ if (args.validate) {
     for (const p of problems) console.error("  ✗ " + p);
     process.exit(1);
   }
-  console.log("✅ 通过：目录完整（覆盖全部可截图点 · 每点有可执行 route · 与 U-11 判定一一对应 · 每系统有独立场景）");
+  console.log(
+    `✅ 通过：目录完整（51 点锁定 · 每点有可执行 route · unknown 归零 · 每点定性有依据 · 与 U-11 判定一一对应 · 12/12 有独立场景）`,
+  );
   process.exit(0);
 }
 
@@ -269,7 +289,7 @@ process.exit(0);
 
 // ---------------------------------------------------------------------------
 
-/** catalog 四态裁定小结 */
+/** catalog 裁定分布小结 */
 function printCatalogSummary(rep) {
   const states = rep.results ? [rep.results.A, rep.results.B].filter(Boolean) : [rep];
   for (const s of states) {
@@ -277,8 +297,8 @@ function printCatalogSummary(rep) {
     if (!cat || !cat.counts) continue;
     const c = cat.counts;
     log("");
-    log(`── 四态裁定 · ${s.productId} · 系统 ${cat.system}（${cat.label || ""}）`);
-    log(`   pass ${c.pass} ｜ fail ${c.fail} ｜ unproven ${c.unproven ?? 0} ｜ unreached ${c.unreached} ｜ blocked ${c.blocked}（合计 ${cat.total ?? "-"}）`);
+    log(`── 裁定分布 · ${s.productId} · 系统 ${cat.system}（${cat.label || ""}）`);
+    log(`   pass ${c.pass} ｜ fail ${c.fail} ｜ unproven ${c.unproven ?? 0} ｜ unreached ${c.unreached} ｜ unreachable ${c.unreachable ?? 0} ｜ blocked ${c.blocked}（合计 ${cat.total ?? "-"}）`);
     for (const r of cat.records || []) {
       if (r.verdict === "pass") continue;
       log(`   · ${r.verdict.padEnd(9)} ${r.id}${r.reason ? " — " + r.reason : ""}`);
