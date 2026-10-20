@@ -161,7 +161,7 @@ const SUITES = [
     node: "runtime",
     file: "tools/test-evidence-manifest.cjs",
     cwd: ".",
-    min: 23,
+    min: 30,
     countRe: /总计：(\d+)\s*通过/,
   },
   {

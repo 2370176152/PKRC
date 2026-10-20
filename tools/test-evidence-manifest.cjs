@@ -309,6 +309,110 @@ async function suiteMisc() {
 }
 
 // ---------------------------------------------------------------------------
+// ⑤ F-14 catalog 五态裁定（2026-10-20 修正：早期版本读不到 ⇒ unproven 被记成 consistent）
+// ---------------------------------------------------------------------------
+async function suiteCatalog() {
+  process.stdout.write("\n── F-14 catalog 五态裁定\n");
+
+  const dualWithCatalog = (recordsByProduct) => ({
+    scenario: { id: "sys-x", label: "系统走查", system: "X" },
+    generatedAt: "2026-10-20T00:00:00.000Z",
+    results: Object.fromEntries(
+      Object.entries(recordsByProduct).map(([pid, recs]) => [
+        pid,
+        {
+          productId: pid,
+          ready: true,
+          checks: [{ name: "c", pass: true }],
+          shots: recs.filter((r) => r.shot).map((r) => ({ name: r.id, file: `${pid}/${r.id}.png` })),
+          state: { catalog: { system: "X", total: recs.length, records: recs.map((r) => ({ id: r.id, label: r.id, verdict: r.verdict, reason: r.reason || "", routeReliability: r.route || "unknown", reachProof: r.proof || null })) } },
+        },
+      ])
+    ),
+    comparisons: [],
+  });
+
+  await test("unproven 必须映射为 attention，**绝不能**记成 consistent", () => {
+    const root = tmpRoot("cat-unproven");
+    mkRun(root, "sys-x-20261020-000000", dualWithCatalog({ A: [{ id: "p1", verdict: "unproven", shot: true }] }));
+    const r = M.scanRuns(root).runs[0];
+    const p = r.points.find((x) => x.id === "p1");
+    assert.strictEqual(p.catalogVerdict, "unproven");
+    assert.strictEqual(p.machineVerdict, "attention", "unproven 是「未证明」，不是「一致」");
+    assert.strictEqual(p.verdictSource, "catalog");
+    assert.strictEqual(p.decisive, false);
+  });
+
+  await test("blocked 的点**没有截图也必须出现**（否则整点不可见）", () => {
+    const root = tmpRoot("cat-blocked");
+    mkRun(root, "sys-x-20261020-000000", dualWithCatalog({ B: [{ id: "b1", verdict: "blocked" }, { id: "b2", verdict: "blocked" }] }));
+    const r = M.scanRuns(root).runs[0];
+    assert.strictEqual(r.points.length, 2, "blocked 无截图的点也要进索引");
+    assert.strictEqual(r.points[0].hasShot, false);
+    assert.strictEqual(r.points[0].machineVerdict, "failed", "blocked = 产物缺口，判 failed 以便归账");
+    assert.strictEqual(r.points[0].decisive, true);
+    assert.deepStrictEqual(r.catalogVerdictTally.blocked, 2);
+  });
+
+  await test("五态映射逐条正确（pass/fail/blocked/unproven/unreachable）", () => {
+    const root = tmpRoot("cat-map");
+    const recs = ["pass", "fail", "blocked", "unproven", "unreachable"].map((v, i) => ({ id: "r" + i, verdict: v, shot: v === "pass" || v === "fail" }));
+    mkRun(root, "sys-x-20261020-000000", dualWithCatalog({ A: recs }));
+    const r = M.scanRuns(root).runs[0];
+    const got = Object.fromEntries(r.points.map((p) => [p.catalogVerdict, p.machineVerdict]));
+    assert.deepStrictEqual(got, {
+      pass: "consistent",
+      fail: "failed",
+      blocked: "failed",
+      unproven: "attention",
+      unreachable: "attention",
+    });
+  });
+
+  await test("catalog 裁定优先于「checks/diff 推出来的结论」", () => {
+    const root = tmpRoot("cat-prio");
+    // checks 全过、无 diff ⇒ 单看 checks/diff 会判 consistent；但 F-14 裁定 unproven
+    mkRun(root, "sys-x-20261020-000000", dualWithCatalog({ A: [{ id: "p1", verdict: "unproven", shot: true }] }));
+    const p = M.scanRuns(root).runs[0].points[0];
+    assert.strictEqual(p.machineVerdict, "attention", "不能被 checks 全过覆盖成 consistent");
+    assert.ok(/F-14 裁定 unproven/.test(p.verdictNote), p.verdictNote);
+  });
+
+  await test("单产物扁平 schema 也能读到 state.catalog（f14-boot-A2 就是这种）", () => {
+    const root = tmpRoot("cat-flat");
+    const flat = dualWithCatalog({ A: [{ id: "p1", verdict: "unproven", shot: true }] }).results.A;
+    const dir = path.join(root, "sys-x-20261020-000000");
+    wf(dir, "report.json", JSON.stringify(Object.assign({ scenario: { id: "sys-x" }, generatedAt: "x" }, flat)));
+    wf(dir, "A/p1.png", "P".repeat(50));
+    const r = M.scanRuns(root).runs[0];
+    assert.strictEqual(r.points.length, 1);
+    assert.strictEqual(r.points[0].catalogVerdict, "unproven");
+    assert.strictEqual(r.points[0].machineVerdict, "attention");
+  });
+
+  await test("没有 catalog 的旧证据仍按 checks/diff 判（不回归）", () => {
+    const root = tmpRoot("cat-none");
+    mkRun(root, "boot-20261020-000000", dualReport({ shots: ["00-a"], diff: 0.001 }));
+    const r = M.scanRuns(root).runs[0];
+    assert.strictEqual(r.points[0].catalogVerdict, null);
+    assert.strictEqual(r.points[0].verdictSource, "checks-diff");
+    assert.strictEqual(r.points[0].machineVerdict, "consistent");
+    assert.strictEqual(r.catalogVerdictTally.none, 1);
+  });
+
+  await test("体积三块分开记（report.json / report.html / PNG），并给出紧凑化后的字节", () => {
+    const root = tmpRoot("cat-bytes");
+    mkRun(root, "sys-x-20261020-000000", dualWithCatalog({ A: [{ id: "p1", verdict: "pass", shot: true }] }), 50);
+    const r = M.scanRuns(root).runs[0];
+    assert.ok(r.reportJsonBytes > 0, "应记录 report.json 磁盘字节");
+    assert.ok(r.reportJsonCompactBytes > 0, "应记录紧凑化字节（用于量化缩进开销）");
+    assert.ok(r.reportJsonBytes >= r.reportJsonCompactBytes, "缩进版不会小于紧凑版");
+    assert.ok(r.pngBytes > 0);
+    assert.ok(r.htmlBytes > 0);
+  });
+}
+
+// ---------------------------------------------------------------------------
 // 主流程
 // ---------------------------------------------------------------------------
 (async function main() {
@@ -317,6 +421,7 @@ async function suiteMisc() {
   process.stdout.write(`临时根：${ROOT}\n`);
 
   await suiteSchema();
+  await suiteCatalog();
   await suiteVerdict();
   await suitePrune();
   await suiteMisc();

@@ -153,6 +153,7 @@ function parseRun(root, entry) {
   const files = listFiles(dir);
   const bytes = files.reduce((s, f) => s + f.size, 0);
   const pngs = files.filter((f) => f.rel.toLowerCase().endsWith(".png"));
+  const pngBytes = pngs.reduce((s, f) => s + f.size, 0);
   const htmls = files.filter((f) => /\.html?$/i.test(f.rel));
 
   const rep = readJson(path.join(dir, "report.json"));
@@ -161,10 +162,16 @@ function parseRun(root, entry) {
     runId: entry.name,
     absDir: dir,
     bytes,
+    pngBytes,
     fileCount: files.length,
     pngCount: pngs.length,
     html: htmls.map((f) => f.rel),
     reportJson: rep ? "report.json" : null,
+    // 体积三大块（H-11 要的「实测 vs 估算」必须分得开，否则会把 JSON 膨胀算漏）
+    reportJsonBytes: (files.find((f) => f.rel === "report.json") || { size: 0 }).size,
+    // 紧凑化后的字节数 —— 用来量化 `JSON.stringify(...,null,2)` 的缩进开销
+    reportJsonCompactBytes: rep ? Buffer.byteLength(JSON.stringify(rep), "utf8") : 0,
+    htmlBytes: htmls.reduce((s, f) => s + f.size, 0),
     scenario: null,
     label: null,
     system: null,
@@ -189,31 +196,56 @@ function parseRun(root, entry) {
   const results = isSingle ? { [rep.productId || "?"]: rep } : rep.results || {};
   const comparisons = isSingle ? [] : rep.comparisons || [];
 
-  run.scenario = rep.scenario && rep.scenario.id ? rep.scenario.id : null;
-  run.label = rep.scenario && rep.scenario.label ? rep.scenario.label : null;
+  run.scenario = rep.scenario && rep.scenario.id ? rep.scenario.id : null;  run.label = rep.scenario && rep.scenario.label ? rep.scenario.label : null;
   run.system = rep.scenario && rep.scenario.system ? rep.scenario.system : null;
   run.generatedAt = rep.generatedAt || null;
 
   run.products = Object.keys(results).sort();
 
-  // 画面点骨架：shots 出现过的名字（并集，保序）
+  // ---------------------------------------------------------------------
+  // 五态裁定（F-14 catalog 格式）
+  // ---------------------------------------------------------------------
+  // ⚠️ 2026-10-20 修正：F-14 把**五态裁定**写在 `results[P].state.catalog.records[]`，
+  //    **不在** `comparisons` 里。早期版本只读 shots + comparisons ⇒
+  //      · `unproven`（到达证明不足）被记成 consistent（**语义相反**）
+  //      · `blocked` 的点没有截图 ⇒ 整个点**不可见**（f14-eryou-B2 曾索引出 0 个点）
+  //    半空的 manifest 比没有更危险 —— 所有者会以为抽查过了。
+  //
+  // 映射（catalogVerdict → machineVerdict），有明确理由：
+  //   pass        → consistent  （机器判一致，仍需 E-3 签认）
+  //   fail        → failed      （决定性）
+  //   blocked     → failed      （产物缺口，需归账：H-13 / L2/L3）
+  //   unproven    → attention   （未证明，需裁定 —— **绝不能算 consistent**）
+  //   unreachable → attention   （确实到不了，需裁定/挂账）
+  const CATALOG_TO_MACHINE = {
+    pass: "consistent",
+    fail: "failed",
+    blocked: "failed",
+    unproven: "attention",
+    unreachable: "attention",
+  };
+
+  /** id → 第一条（按产物序）catalog record */
+  const recById = new Map();
+  for (const pid of run.products) {
+    const c = results[pid].state && results[pid].state.catalog;
+    for (const rec of (c && c.records) || []) {
+      if (rec && rec.id && !recById.has(rec.id)) recById.set(rec.id, Object.assign({ product: pid }, rec));
+    }
+  }
+
+  // 画面点骨架 = shots ∪ comparisons ∪ catalog records（并集，保序）
   const shotOrder = [];
   const seen = new Set();
-  for (const pid of run.products) {
-    for (const sh of results[pid].shots || []) {
-      if (!sh || !sh.name) continue;
-      if (!seen.has(sh.name)) {
-        seen.add(sh.name);
-        shotOrder.push(sh.name);
-      }
+  const push = (id) => {
+    if (id && !seen.has(id)) {
+      seen.add(id);
+      shotOrder.push(id);
     }
-  }
-  for (const c of comparisons) {
-    if (c && c.shot && !seen.has(c.shot)) {
-      seen.add(c.shot);
-      shotOrder.push(c.shot);
-    }
-  }
+  };
+  for (const pid of run.products) for (const sh of results[pid].shots || []) push(sh && sh.name);
+  for (const c of comparisons) push(c && c.shot);
+  for (const id of recById.keys()) push(id);
 
   const cmpByShot = new Map();
   for (const c of comparisons) if (c && c.shot) cmpByShot.set(c.shot, c);
@@ -240,6 +272,7 @@ function parseRun(root, entry) {
       if (f) ptBytes += f.size;
     }
 
+    const rec = recById.get(name) || null;
     const pt = {
       id: name,
       images,
@@ -254,15 +287,44 @@ function parseRun(root, entry) {
         : null,
       checks: checkByProduct,
       ready: readyByProduct,
+      // 五态裁定原样保留（**权威口径**，来自 F-14）
+      catalogVerdict: rec ? rec.verdict || null : null,
+      catalogReason: rec ? rec.reason || "" : "",
+      catalogProduct: rec ? rec.product : null,
+      routeReliability: rec ? rec.routeReliability || null : null,
+      reachProof: rec ? rec.reachProof || null : null,
+      hasShot: Object.keys(images).length > 0,
     };
-    Object.assign(pt, machineVerdict(pt, DEFAULT_DIFF_THRESHOLD));
+    // 有 catalog 裁定就以它为准；没有才退回「机器从 checks/diff 推」
+    if (rec && CATALOG_TO_MACHINE[rec.verdict]) {
+      Object.assign(pt, {
+        machineVerdict: CATALOG_TO_MACHINE[rec.verdict],
+        verdictNote: `F-14 裁定 ${rec.verdict}${rec.reason ? "：" + rec.reason : ""}`,
+        decisive: rec.verdict === "fail" || rec.verdict === "blocked",
+        verdictSource: "catalog",
+      });
+    } else {
+      Object.assign(pt, machineVerdict(pt, DEFAULT_DIFF_THRESHOLD));
+      pt.verdictSource = "checks-diff";
+    }
     run.points.push(pt);
   }
 
   const v = tallyVerdicts(run.points);
   run.machineVerdict = v.top;
   run.verdictTally = v.tally;
+  run.catalogVerdictTally = tallyCatalog(run.points);
   return run;
+}
+
+/** 五态裁定分布（F-14 原样口径） */
+function tallyCatalog(points) {
+  const t = { pass: 0, fail: 0, blocked: 0, unproven: 0, unreachable: 0, none: 0 };
+  for (const p of points) {
+    if (p.catalogVerdict && t[p.catalogVerdict] !== undefined) t[p.catalogVerdict]++;
+    else t.none++;
+  }
+  return t;
 }
 
 /**
@@ -369,9 +431,19 @@ function cmdBuild() {
     pngs: runs.reduce((s, r) => s + r.pngCount, 0),
     bytes: runs.reduce((s, r) => s + r.bytes, 0),
     files: runs.reduce((s, r) => s + r.fileCount, 0),
+    // 三块分开记：过 H-11 的「实测 vs 估算」时，混在一起就会把 JSON 膨胀算漏
+    reportJsonBytes: runs.reduce((s, r) => s + (r.reportJsonBytes || 0), 0),
+    reportJsonCompactBytes: runs.reduce((s, r) => s + (r.reportJsonCompactBytes || 0), 0),
+    htmlBytes: runs.reduce((s, r) => s + (r.htmlBytes || 0), 0),
+    pngOnDiskBytes: runs.reduce((s, r) => s + (r.pngBytes || 0), 0),
   };
   const tallyAll = { failed: 0, attention: 0, consistent: 0 };
   for (const r of runs) for (const p of r.points) if (tallyAll[p.machineVerdict] !== undefined) tallyAll[p.machineVerdict]++;
+  const catalogAll = { pass: 0, fail: 0, blocked: 0, unproven: 0, unreachable: 0, none: 0 };
+  for (const r of runs) {
+    const t = r.catalogVerdictTally || {};
+    for (const k of Object.keys(catalogAll)) catalogAll[k] += t[k] || 0;
+  }
 
   // 体积推算（**给出假设，不直接抛数字**）
   const allPngs = [];
@@ -411,29 +483,53 @@ function cmdBuild() {
     return s + b;
   }, 0);
 
+  // JSON 成本（F-14 起 report.json 成为主要成本项，必须单独算）
+  const runsWithPoints = runs.filter((r) => r.points.length > 0);
+  const ptsInRuns = runsWithPoints.reduce((s, r) => s + r.points.length, 0);
+  const jsonInRuns = runsWithPoints.reduce((s, r) => s + (r.reportJsonBytes || 0), 0);
+  const jsonCompactInRuns = runsWithPoints.reduce((s, r) => s + (r.reportJsonCompactBytes || 0), 0);
+  const measuredJsonPerPoint = ptsInRuns > 0 ? jsonInRuns / ptsInRuns : null;
+  const jsonIndentRatio = jsonCompactInRuns > 0 ? jsonInRuns / jsonCompactInRuns : null;
+
   const estimate = {
     basis: {
       f12PointTotal: F12_POINT_TOTAL,
       measuredDualProductPoints: dualRuns.reduce((s, r) => s + r.points.length, 0),
       measuredPointBytes: measuredPointBytes === null ? null : Math.round(measuredPointBytes),
+      measuredJsonPerPoint: measuredJsonPerPoint === null ? null : Math.round(measuredJsonPerPoint),
+      jsonIndentRatio: jsonIndentRatio === null ? null : Number(jsonIndentRatio.toFixed(2)),
       htmlOverPngRatio: pngBytesForRatio > 0 ? Number((htmlBytesForRatio / pngBytesForRatio).toFixed(3)) : null,
       note:
-        "measuredPointBytes = 已实测「双产物单点（A+B+并排对比 3 张）」的平均字节数；" +
-        "htmlOverPngRatio = report.html（图片 base64 内联）字节 ÷ PNG 总字节，衡量 HTML 的重复开销。",
+        "measuredPointBytes = 实测「双产物单点（A+B+并排对比）」的 PNG 字节均值；" +
+        "measuredJsonPerPoint = 实测「每个画面点摊到的 report.json 字节」；" +
+        "jsonIndentRatio = report.json 磁盘字节 ÷ 紧凑 JSON 字节 —— 量化 `JSON.stringify(...,null,2)` 的缩进开销；" +
+        "htmlOverPngRatio = report.html 字节 ÷ PNG 总字节。**F-14 起 JSON 才是主要成本项，只看 PNG 会严重低估。**",
     },
     scenarios: [],
   };
   if (measuredPointBytes !== null) {
-    const full = Math.round(measuredPointBytes * F12_POINT_TOTAL);
-    const fullWithHtml = Math.round(full * (1 + (estimate.basis.htmlOverPngRatio || 0)));
+    const pngTotal = measuredPointBytes * F12_POINT_TOTAL;
+    const jsonTotal = measuredJsonPerPoint === null ? 0 : measuredJsonPerPoint * F12_POINT_TOTAL;
+    const jsonCompactTotal = jsonIndentRatio ? jsonTotal / jsonIndentRatio : jsonTotal;
+    const htmlTotal = pngTotal * (estimate.basis.htmlOverPngRatio || 0);
     // 治理后：一致点降采样到 1/2 线性尺寸 —— 实测聚合 27.3%（6 张 581.1KB → 158.8KB），取 0.27
-    const CONSISTENT_SHARE = 0.7; // 假设：70% 的画面点最终判为一致（取乐观值，须由 E-3 实测替换）
+    const CONSISTENT_SHARE = 0.7; // 假设：70% 的画面点最终判为一致（须由 H-2 实测替换）
     const HALF_RATIO = 0.27;
-    const governed = Math.round(full * (CONSISTENT_SHARE * HALF_RATIO + (1 - CONSISTENT_SHARE)));
+    const governedPng = pngTotal * (CONSISTENT_SHARE * HALF_RATIO + (1 - CONSISTENT_SHARE));
     estimate.scenarios = [
-      { name: `F-12 全量 ${F12_POINT_TOTAL} 点 · 双产物 · 全帧（PNG 仅）`, bytes: full },
-      { name: `同上 + report.html（base64 内联，实测重复比 ${(estimate.basis.htmlOverPngRatio || 0).toFixed(2)}×）`, bytes: fullWithHtml },
-      { name: `同上 · compact 后（假设 ${CONSISTENT_SHARE * 100}% 点判为一致、降采样至 ${HALF_RATIO * 100}%）`, bytes: governed },
+      { name: `${F12_POINT_TOTAL} 点 · 仅 PNG 全帧（B-12 第一版的估算口径）`, bytes: Math.round(pngTotal) },
+      {
+        name: `${F12_POINT_TOTAL} 点 · 实际构成（PNG + report.json + report.html）`,
+        bytes: Math.round(pngTotal + jsonTotal + htmlTotal),
+      },
+      {
+        name: `${F12_POINT_TOTAL} 点 · 若 report.json 改紧凑序列化（缩进开销 ${jsonIndentRatio ? jsonIndentRatio.toFixed(1) + "×" : "?"} 归零）`,
+        bytes: Math.round(pngTotal + jsonCompactTotal + htmlTotal),
+      },
+      {
+        name: `${F12_POINT_TOTAL} 点 · 紧凑 JSON + compact 降采样（假设 ${CONSISTENT_SHARE * 100}% 点判为一致）`,
+        bytes: Math.round(governedPng + jsonCompactTotal + htmlTotal * 0.5),
+      },
     ];
   }
 
@@ -469,6 +565,7 @@ function cmdBuild() {
       html: r.html,
       machineVerdict: r.machineVerdict || null,
       verdictTally: r.verdictTally || null,
+      catalogVerdictTally: r.catalogVerdictTally || null,
       broken: r.broken,
       dir: r.runId, // 相对 root
       points: r.points,
@@ -480,7 +577,16 @@ function cmdBuild() {
 
   out("");
   out(`合计：${totals.runs} 个 run · ${totals.points} 个画面点 · ${totals.pngs} 张 PNG · ${human(totals.bytes)}`);
+  out(
+    `  构成：report.json ${human(totals.reportJsonBytes)}（紧凑化后 ${human(totals.reportJsonCompactBytes)}）· ` +
+      `report.html ${human(totals.htmlBytes)} · PNG ${human(totals.pngOnDiskBytes)}`
+  );
   out(`机器判定：failed ${tallyAll.failed} / attention ${tallyAll.attention} / consistent ${tallyAll.consistent}`);
+  out(
+    `F-14 五态：pass ${catalogAll.pass} / fail ${catalogAll.fail} / blocked ${catalogAll.blocked} / ` +
+      `unproven ${catalogAll.unproven} / unreachable ${catalogAll.unreachable}` +
+      (catalogAll.none ? ` / 无裁定 ${catalogAll.none}` : "")
+  );
   out("");
   out("体积推算（假设已在 manifest.estimate.basis 中写明）：");
   for (const s of estimate.scenarios) out(`  · ${pad(human(s.bytes), 10)} ${s.name}`);
