@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-19T01:58:25.477Z",
+  "generatedAt": "2026-10-20T08:11:37.835Z",
   "origin": "node-codec",
   "originDetail": "产物未暴露 window.CryptoJS，退回归 Node 实现生成（等价于派单④的降级方案）",
   "content": "synthetic",
@@ -17,7 +17,7 @@
   },
   "sha256": {
     "plaintext": "ed64b85c6f7777305d93174fc49f8938ef67d784ac517fa6a4ecbe12f9d27a08",
-    "cipherOnce": "379e7d94ad63f43dc134db7a93d3d868ad59289fe50b0b164855f63eab072bec",
+    "cipherOnce": "2a48a924bf2a9436706d35497a4115c2d6614c3f6439add3e4dce8ee06df1b5f",
     "cipherNote": "随机 salt ⇒ 密文不可复现；要校验重建结果请比对 sha256.plaintext，不要比对密文"
   },
   "crossCheck": {
