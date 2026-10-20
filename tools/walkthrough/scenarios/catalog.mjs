@@ -29,7 +29,7 @@
  *   node tools/walkthrough/cli.mjs --validate     # 静态：目录完整性自检
  */
 
-import { k, ks, taps, wait, settle, change, reload, note, retreat, enterBattle } from "../lib/route.mjs";
+import { k, ks, taps, wait, settle, change, reload, note, retreat, enterBattle, waitFor } from "../lib/route.mjs";
 
 export const CATALOG_VERSION = 2;
 
@@ -90,6 +90,124 @@ const menuItem = (index) => [
 
 /** 战斗内点：要求已在一场战斗中（需 --inject 或 enterBattle 前置） */
 const inBattle = () => [note("@requiresInject 依赖已进入战斗的存档；无注入时结果不可复现"), settle(0.05, 8000)];
+
+// ─────────────────────────────────────────────────────────────
+// 第八阶段 A-1：**到达探针**（waitFor 真实状态断言）
+// ─────────────────────────────────────────────────────────────
+//
+// 🔴 **背景（2026-10-20 实测）**：本作全部 UI 渲染在单个 canvas 里 ——
+//   `document.body.innerText.length === 0`，`document.body` 只有 `#app` + `#touchControls`；
+//   `Phaser.GAMES` 在该构建下也不可用。
+//   ⇒ **DOM 断言对游戏内画面完全失效**（U-11 的判断是对的）。
+//
+// ✅ **解法**：`src/main.ts` 用 `Object.defineProperty` 暴露了一个**只读**句柄
+//   `window.__PKRC_GAME__`（纯观测，不创建/不修改/不驱动任何逻辑，去掉不影响游戏行为）。
+//   有了它就能读**真实状态**：当前 Phase 名 / 波次 / 队伍人数 / HP / UiMode / gameData.pt。
+//   ⇒ 到达证明从「画面变了」这种弱证明，升级为「状态断言」(`reachProof = "dom"`)。
+//
+// ⚠️ **实测得到的进入链路**（`LoginPhase` 起，见 `--scenario sys-boot` 的探针日志）：
+//   `LoginPhase` --z×4--> `SelectGenderPhase` --z--> `TitlePhase` --z×2--> `SelectStarterPhase`
+//   继续往下需要**鼠标点选初始宝可梦卡片**（纯键盘 z/方向键实测无效），
+//   所以战斗内点目前止步于 `SelectStarterPhase` —— 这是"route 到不了"，不是产品缺陷。
+
+/** 探针公共前缀：定位持有 gameData 的那个场景（key 实测是 `battle`，不是 `BattleScene`） */
+const PROBE_HEAD = [
+  // 🔴 **无句柄的产物（A 侧 modder 原产物）必须放行** ——
+  //   句柄只在 B 的 `src/main.ts` 里加过，A 是二进制产物没有。
+  //   若这里 return false，A 的每一个点都会 unreached ⇒ **A/B 对比直接失效**，
+  //   且会把「探针不可用」误报成「画面到不了」。⇒ 缺失时 return true（跳过，退回原判定）。
+  "if(typeof window.__PKRC_GAME__===\"undefined\")return true;",
+  "const g=window.__PKRC_GAME__;if(!g||!g.scene)return true;",
+  "const s=g.scene.scenes.find(x=>x.gameData);if(!s)return true;",
+].join("");
+
+/**
+ * 生成一个 `waitFor` 步骤，表达式在页面里读真实状态。
+ * @param {string} body 探针主体（已注入 `g` / `s`）
+ * @param {string} desc 人类可读的期望
+ * @param {number} [timeout]
+ */
+const probe = (body, desc, timeout = 20_000) =>
+  waitFor(`(() => { ${PROBE_HEAD} ${body} })()`, desc, timeout);
+
+/**
+ * 游戏已起来且处于可交互流程（最低档）。
+ *
+ * ⚠️ 判据是「有 Phase 管理器 + 当前 Phase 可读」，**不要求**离开 `LoginPhase` ——
+ *   因为 `LoginPhase` 的过场很长（实测 t=14s 仍在其中），把它当门槛会让首屏类点误判。
+ *   需要"真的进了游戏"的点请用 `REACH_IN_RUN`。
+ */
+const REACH_READY = () => probe(
+  `const pm=s.phaseManager;const p=pm?.getCurrentPhase?.()?.phaseName;return !!pm&&typeof p==="string"&&p.length>0;`,
+  "游戏主流程已起来（Phase 管理器可读）",
+  20_000,
+);
+
+/** 已进入 run（有波次 + 我方队伍非空）—— 战斗内点的真正前置 */
+const REACH_IN_RUN = () => probe(
+  `const p=s.phaseManager?.getCurrentPhase?.()?.phaseName;return !!p&&p!=="LoginPhase"&&(s.currentBattle?.waveIndex??0)>0&&(s.getPlayerParty?.()?.length??0)>0;`,
+  "已进入 run（waveIndex>0 且我方队伍非空）",
+  30_000,
+);
+
+/** 当前 Phase 属于给定集合之一 */
+const REACH_PHASE = (names, desc) => probe(
+  `const p=s.phaseManager?.getCurrentPhase?.()?.phaseName;return ${JSON.stringify(names)}.includes(p);`,
+  desc ?? `当前 Phase ∈ {${names.join(", ")}}`,
+  30_000,
+);
+
+/** 当前 UiMode 等于给定值 */
+const REACH_UI = (mode, desc) => probe(
+  `try { return s.ui?.getMode?.() === ${mode}; } catch { return false; }`,
+  desc ?? `UiMode === ${mode}`,
+  20_000,
+);
+
+/**
+ * 从冷启动走到 `SelectStarterPhase`（实测链路，替代原先盲按的 `enterBattle()`）。
+ *
+ * 产物实测：`LoginPhase` 需要 4 次确认才过，之后性别 → 标题 → 开局设置各 1~2 次。
+ * 与 `route.mjs` 的 `enterBattle()` 相比，这条链**带状态断言**，走不通会明确 `unreached`
+ * 而不是"按了几下就当到了"。
+ */
+/**
+ * 带间隔的连按。
+ * 🔴 **不能用 `taps()`** —— 它生成的连续 key 步骤在 `runRoute` 里只间隔 60ms（`delay(s.holdMs?30:60)`），
+ *   实测游戏根本吃不到（`LoginPhase` 的确认需要 ≥600ms 间隔才被识别）。
+ *   本函数把间隔做成显式 `wait` 步骤，序列可读、可调。
+ */
+const tapsSlow = (key, n, gapMs = 800) => {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    out.push(k(key), wait(gapMs));
+  }
+  return out;
+};
+
+const enterGame = () => [
+  note("登录/标题/初始选择链路（实测：z×4 → 性别 → 标题 → 开局）"),
+  // 🔴 **必须先等**：ready 判定通过时画面已非黑屏，但 `LoginPhase` 的过场动画还在跑，
+  //   此时按键会被吞掉（实测：t=14s 仍在 LoginPhase，按 4 次 z 后约 t=20s 才推进）。
+  wait(5000),
+  ...tapsSlow("z", 4, 900),
+  wait(1200),
+  REACH_PHASE(["SelectGenderPhase", "TitlePhase", "SelectStarterPhase"], "已离开 LoginPhase"),
+  ...tapsSlow("z", 3, 900),
+  wait(1200),
+  REACH_PHASE(["TitlePhase", "SelectStarterPhase"], "已到标题/开局流程"),
+  ...tapsSlow("z", 2, 900),
+  wait(1200),
+  settle(0.05, 6000),
+];
+
+/** 战斗内点（当前止步于 SelectStarterPhase，见文件头说明） */
+const inRun = () => [
+  ...enterGame(),
+  note("⚠️ 战斗内点当前止步于此：继续需鼠标点选 starter 卡片（纯键盘实测无效）"),
+  REACH_READY(),
+];
+
 
 /** @type {Array<{id:string,code:string,label:string,note?:string,points:Array<object>}>} */
 export const CATALOG = [
@@ -996,6 +1114,57 @@ export function catalogStats() {
   for (const s of CATALOG) for (const p of s.points) byReliability[p.routeReliability] = (byReliability[p.routeReliability] ?? 0) + 1;
   const gated = CATALOG.reduce((n, s) => n + s.points.filter((p) => !!p.gate).length, 0);
   return { systems: CATALOG.length, total, verified, designed: total - verified, byReliability, gated, ungated: total - gated };
+}
+
+// ─────────────────────────────────────────────────────────────
+// 第八阶段 A-1：统一为每个画面点追加「到达探针」
+// ─────────────────────────────────────────────────────────────
+// 原则：
+//  · 只**追加** waitFor，不改各点原有的导航步骤（原 route 保留，语义不变）
+//  · 已经有 waitFor 的点跳过（避免重复）
+//  · 需要"在 run 里"的点用 `REACH_IN_RUN`；其余用 `REACH_READY`
+//  · 探针失败 ⇒ `unreached`（不是 fail）—— 语义是"路由到不了"，不是"产品坏了"
+
+/** 必须已进入 run（有波次 + 我方队伍）才能成立的画面点 */
+const NEEDS_RUN = new Set([
+  "talent.shop", "talent.acquire-toast", "talent.runtime-hud", "talent.xingxiang", "talent.yijianqingyuan",
+  "eryou.battle", "eryou.shop", "eryou.synthesis", "eryou.abyss-buff",
+  "pt.start", "pt.shop", "pt.settle",
+  "jieming.shield", "jieming.skill", "jieming.turnorder",
+  "healer.wish", "healer.seaguard",
+  "nianli.stacks", "nianli.burst",
+  "callingcard.gauge", "callingcard.resolve", "callingcard.command",
+  "dianxin.echo",
+  "misc.super-backpack", "misc.meloetta", "misc.mew", "misc.manaphy",
+]);
+
+for (const sys of CATALOG) {
+  for (const pt of sys.points) {
+    if (!Array.isArray(pt.route)) {
+      pt.route = [];
+    }
+    if (pt.route.some((st) => st && st.t === "waitFor")) {
+      continue; // 已有探针
+    }
+    // 🔴 **已验证点不加探针**：`routeReliability === "verified"` 的点（boot.ready / boot.welcome-popup）
+    //   本身已是 `none-verified` 档（打开即到位），再加一个"离开 LoginPhase"的探针反而会把它们
+    //   判成 unreached（首屏那一刻确实还在 LoginPhase）—— 这是**降级**，不是补强。
+    if (pt.routeReliability === "verified") {
+      continue;
+    }
+    const needsRun = NEEDS_RUN.has(pt.id);
+    const hasKeys = pt.route.some((st) => st && st.t === "key");
+    if (needsRun && !hasKeys) {
+      // 没有任何导航步骤的战斗内点：补上「进游戏」链路，再做状态断言
+      pt.route.push(...inRun());
+    } else {
+      pt.route.push(needsRun ? REACH_IN_RUN() : REACH_READY());
+    }
+    // 补了探针的点，可靠性至少是"实测过链路"档
+    if (pt.routeReliability === "unknown") {
+      pt.routeReliability = "derived";
+    }
+  }
 }
 
 export default CATALOG;
